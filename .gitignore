@@ -47,7 +47,6 @@ $RECYCLE.BIN/
 # ==========================================
 .env
 .env.*
-env.*
 
 # Example / template files are tracked in git
 !.env.example
