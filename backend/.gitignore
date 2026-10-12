@@ -1,0 +1,45 @@
+# Python bytecode and extension modules
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Local environments and uv cache
+.venv/
+venv/
+env/
+ENV/
+.uv_cache/
+
+# Environment files and private credentials
+.env
+.env.*
+!.env.example
+!.env*.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.cert
+
+# Test, lint, type-check, and coverage outputs
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Local databases and logs
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+*.log
