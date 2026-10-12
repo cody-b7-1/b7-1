@@ -157,7 +157,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "pydantic-settings", specifier = ">=2.0,<3" },
     { name = "pymysql", specifier = ">=1.1,<2" },
-    { name = "sqlalchemy", specifier = ">=2.0,<3" },
+    { name = "sqlalchemy", specifier = ">=2.1,<3" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
 
