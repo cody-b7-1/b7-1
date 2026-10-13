@@ -42,8 +42,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.TIMESTAMP(), server_default=sa.text('utc_timestamp()'), nullable=False),
     sa.Column('updated_at', sa.TIMESTAMP(), server_default=sa.text('utc_timestamp()'), nullable=False),
     sa.Column('deleted_at', sa.TIMESTAMP(), nullable=True),
-    sa.PrimaryKeyConstraint('user_id'),
-    sa.UniqueConstraint('email')
+    sa.PrimaryKeyConstraint('user_id')
     )
     op.create_table('chats',
     sa.Column('chat_id', sa.UUID(), nullable=False),
@@ -63,13 +62,12 @@ def upgrade() -> None:
     sa.Column('verification_id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.UUID(), nullable=False),
     sa.Column('token_hash', sa.String(length=255), nullable=False),
-    sa.Column('is_verified', sa.Boolean(), server_default=sa.text('0'), nullable=False),
     sa.Column('expires_at', sa.TIMESTAMP(), nullable=False),
     sa.Column('created_at', sa.TIMESTAMP(), server_default=sa.text('utc_timestamp()'), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.user_id'], ),
-    sa.PrimaryKeyConstraint('verification_id')
+    sa.PrimaryKeyConstraint('verification_id'),
+    sa.UniqueConstraint('user_id')
     )
-    op.create_index('ix_email_verifications_user_id', 'email_verifications', ['user_id'], unique=False)
     op.create_table('refresh_tokens',
     sa.Column('token_id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.UUID(), nullable=False),
@@ -105,7 +103,6 @@ def downgrade() -> None:
     op.drop_table('messages')
     op.drop_index('ix_refresh_tokens_user_id', table_name='refresh_tokens')
     op.drop_table('refresh_tokens')
-    op.drop_index('ix_email_verifications_user_id', table_name='email_verifications')
     op.drop_table('email_verifications')
     op.drop_index('ix_chats_user_id', table_name='chats')
     op.drop_index('ix_chats_current_philosopher_id', table_name='chats')

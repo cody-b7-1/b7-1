@@ -26,7 +26,7 @@ class User(CreatedAtMixin, UpdatedAtMixin, SoftDeleteMixin, Base):
     __tablename__ = "users"
 
     user_id: Mapped[UUID] = mapped_column(SAUUID(as_uuid=True), primary_key=True)
-    email: Mapped[str] = mapped_column(String(254), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(254), nullable=False)
     nickname: Mapped[str] = mapped_column(String(50), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(
@@ -43,6 +43,8 @@ class User(CreatedAtMixin, UpdatedAtMixin, SoftDeleteMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("1"))
     email_verified_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, nullable=True)
 
-    email_verifications: Mapped[list[EmailVerification]] = relationship(back_populates="user")
+    email_verification: Mapped[EmailVerification | None] = relationship(
+        back_populates="user", uselist=False
+    )
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user")
     chats: Mapped[list[Chat]] = relationship(back_populates="user")

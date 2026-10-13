@@ -4,14 +4,14 @@
 erDiagram
     USERS ||--o{ REFRESH_TOKENS : "issues"
     USERS ||--o{ CHATS : "owns"
-    USERS ||--o{ EMAIL_VERIFICATIONS : "requests"
+    USERS ||--o| EMAIL_VERIFICATIONS : "requests"
     PHILOSOPHERS ||--o{ CHATS : "assigned_to"
     PHILOSOPHERS ||--o{ MESSAGES : "assigned_to"
     CHATS ||--o{ MESSAGES : "contains"
 
     USERS {
         UUID user_id PK "회원 고유 식별자"
-        varchar(254) email UK "이메일 계정 (탈퇴 회원 제외 유니크)"
+        varchar(254) email "이메일 계정"
         varchar(50) nickname "닉네임"
         varchar(255) password_hash "암호화 비밀번호"
         varchar(20) role "권한 구분 (ADMIN, USER)"
@@ -24,9 +24,8 @@ erDiagram
 
     EMAIL_VERIFICATIONS {
         UUID verification_id PK "인증 식별자"
-        UUID user_id FK "인증 대상 회원 ID"
+        UUID user_id FK, UK "인증 대상 회원 ID (사용자당 1건)"
         varchar(255) token_hash "인증 코드 해시"
-        boolean is_verified "인증 완료 여부 (DEFAULT FALSE)"
         timestamp expires_at "만료 일시"
         timestamp created_at "발송 일시"
     }
