@@ -45,62 +45,15 @@ $RECYCLE.BIN/
 # ==========================================
 # Environment Variables & Secrets
 # ==========================================
-.env
-.env.*
+/.env
+/.env.*
 
 # Example / template files are tracked in git
-!.env.example
-!.env*.example
-!*.env.example
-!env.example
-!.env.sample
-!.env.template
-
-*.pem
-*.key
-*.cert
-
-# ==========================================
-# Python / FastAPI / uv
-# ==========================================
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-
-# Virtual Environments (uv, venv)
-.venv/
-venv/
-env/
-ENV/
-.uv_cache/
-
-# NOTE: uv.lock is recommended to be tracked in git for applications.
-# If you need to ignore it, uncomment the line below:
-# uv.lock
-
-# Testing & Linting & Typing (pytest, ruff, mypy)
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-.coverage.*
-htmlcov/
-coverage.xml
-
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-*.egg
-
-# Database & Logs
-*.db
-*.sqlite
-*.sqlite3
-*.sqlite3-journal
-*.log
+!/.env.example
+!/.env*.example
+!/env.example
+!/.env.sample
+!/.env.template
 
 # ==========================================
 # Frontend (React / Vite / Next.js / Node)
