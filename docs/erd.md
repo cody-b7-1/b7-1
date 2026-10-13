@@ -11,7 +11,8 @@ erDiagram
 
     USERS {
         UUID user_id PK "회원 고유 식별자"
-        varchar(254) email "이메일 계정"
+        varchar(254) email UK "활성 계정 이메일 (active_marker와 복합 유니크)"
+        int active_marker UK "활성 상태 마커 (deleted_at IS NULL이면 1, 아니면 NULL; 생성 컬럼)"
         varchar(50) nickname "닉네임"
         varchar(255) password_hash "암호화 비밀번호"
         varchar(20) role "권한 구분 (ADMIN, USER)"

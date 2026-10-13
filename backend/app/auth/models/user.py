@@ -5,7 +5,17 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, Enum as SAEnum, String, TIMESTAMP, UUID as SAUUID, text
+from sqlalchemy import (
+    Boolean,
+    Computed,
+    Enum as SAEnum,
+    Integer,
+    String,
+    TIMESTAMP,
+    UUID as SAUUID,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -24,9 +34,20 @@ class Role(str, enum.Enum):
 
 class User(CreatedAtMixin, UpdatedAtMixin, SoftDeleteMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("email", "active_marker", name="uq_users_email_active_marker"),
+    )
 
     user_id: Mapped[UUID] = mapped_column(SAUUID(as_uuid=True), primary_key=True)
     email: Mapped[str] = mapped_column(String(254), nullable=False)
+    active_marker: Mapped[int | None] = mapped_column(
+        Integer,
+        Computed(
+            "CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END",
+            persisted=True,
+        ),
+        nullable=True,
+    )
     nickname: Mapped[str] = mapped_column(String(50), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(
