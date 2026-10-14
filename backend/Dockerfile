@@ -2,7 +2,7 @@
 FROM python:3.12-slim
 
 # uv 설치
-COPY --from=ghcr.io/astral-sh/uv:0.5.20 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /uvx /bin/
 
 WORKDIR /app
 
