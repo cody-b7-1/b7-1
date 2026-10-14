@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import FastAPI, status
 from pydantic import BaseModel, Field
 
+from app.auth.router import router as auth_router
 from app.core.config import settings
 
 class HealthResponse(BaseModel):
@@ -18,6 +19,8 @@ app = FastAPI(
     docs_url="/docs",
     openapi_url="/openapi.json",
 )
+
+app.include_router(auth_router)
 
 
 if settings.is_local_development:
