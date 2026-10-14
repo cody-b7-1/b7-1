@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -22,6 +23,11 @@ class Settings(BaseSettings):
     db_password: str
     db_name: str
 
+    app_env: str = "production" #app에 env 없는 경우 production 기본값
+    jwt_secret_key: str | None = None
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_days: int = Field(default=7, gt=0)
+
     @property
     def database_url(self) -> URL:
         return URL.create(
@@ -32,6 +38,10 @@ class Settings(BaseSettings):
             port=self.db_port,
             database=self.db_name,
         )
+
+    @property
+    def is_local_development(self) -> bool:
+        return self.app_env == "development"
 
 
 settings = Settings()

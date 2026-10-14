@@ -6,7 +6,7 @@ __pycache__/
 venv/
 env/
 ENV/
-.uv_cache/
+.uv-cache/
 .git/
 .gitignore
 .pytest_cache/
