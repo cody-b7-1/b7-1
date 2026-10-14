@@ -1,0 +1,193 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Philo API",
+    "version": "1.0.0",
+    "description": "Notion의 ‘API 기본 명세서’에서 이전한 OpenAPI 문서입니다. 원본에 정의되지 않은 요청/응답 스키마와 상태 코드는 별도 합의 전까지 정의하지 않습니다."
+  },
+  "tags": [
+    { "name": "인증", "description": "사용자 인증 및 세션 관리" },
+    { "name": "채팅", "description": "철학자와의 대화 관리" },
+    { "name": "메인", "description": "서비스 공통 조회" }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["인증"],
+        "summary": "로그인 하기",
+        "description": "로그인 합니다.",
+        "x-users": ["유저"],
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["인증"],
+        "summary": "Access Token 갱신",
+        "description": "Refresh Token을 통한 Access Token 재발급",
+        "x-users": ["유저"],
+        "x-authentication": "Refresh Token 쿠키",
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      }
+    },
+    "/auth/sign-up": {
+      "post": {
+        "tags": ["인증"],
+        "summary": "회원가입 하기",
+        "description": "이메일과 비밀번호로 회원가입",
+        "x-users": ["유저"],
+        "x-authentication": "불필요",
+        "responses": {
+          "201": {
+            "description": "회원가입이 완료되었습니다. 응답 본문은 반환하지 않습니다."
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["인증"],
+        "summary": "로그아웃",
+        "description": "로그아웃",
+        "x-users": ["유저"],
+        "x-authentication": "사용자 jwt",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      }
+    },
+    "/auth/email/send": {
+      "post": {
+        "tags": ["인증"],
+        "summary": "이메일 인증",
+        "description": "이메일 인증번호 발송",
+        "x-users": ["유저"],
+        "x-authentication": "불필요",
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      }
+    },
+    "/auth/email/verify": {
+      "post": {
+        "tags": ["인증"],
+        "summary": "이메일 링크 검증",
+        "description": "이메일 인증 링크 검증",
+        "x-users": ["유저"],
+        "x-authentication": "불필요",
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      }
+    },
+    "/api/chats": {
+      "post": {
+        "tags": ["채팅"],
+        "summary": "채팅 시작",
+        "description": "특정 철학자와 대화를 시작합니다.",
+        "x-users": ["유저"],
+        "x-authentication": "사용자 jwt",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      },
+      "get": {
+        "tags": ["채팅"],
+        "summary": "채팅 목록",
+        "description": "지금까지의 대화 목록을 불러옵니다.",
+        "x-users": ["유저"],
+        "x-authentication": "사용자 jwt",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      }
+    },
+    "/api/chats/{chat_id}": {
+      "parameters": [
+        {
+          "name": "chat_id",
+          "in": "path",
+          "required": true,
+          "description": "채팅 식별자",
+          "schema": { "type": "string", "format": "uuid" }
+        }
+      ],
+      "get": {
+        "tags": ["채팅"],
+        "summary": "채팅 상세 조회",
+        "description": "특정 chat_id에 대해서 지금까지의 대화 내용을 모두 불러운다.",
+        "x-users": ["유저"],
+        "x-authentication": "사용자 jwt",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      },
+      "delete": {
+        "tags": ["채팅"],
+        "summary": "채팅 삭제",
+        "description": "해당 채팅 삭제",
+        "x-users": ["유저"],
+        "x-authentication": "사용자 jwt",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      }
+    },
+    "/api/chats/{chat_id}/messages": {
+      "parameters": [
+        {
+          "name": "chat_id",
+          "in": "path",
+          "required": true,
+          "description": "채팅 식별자",
+          "schema": { "type": "string", "format": "uuid" }
+        }
+      ],
+      "post": {
+        "tags": ["채팅"],
+        "summary": "채팅하기",
+        "description": "대화를 이어갑니다.",
+        "x-users": ["유저"],
+        "x-authentication": "사용자 jwt",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      }
+    },
+    "/api/philosophers": {
+      "get": {
+        "tags": ["메인"],
+        "summary": "철학자 목록",
+        "description": "선택 가능한 철학자 목록",
+        "x-users": ["모두"],
+        "responses": {
+          "default": { "description": "응답 형식은 원본 명세에 정의되어 있지 않습니다." }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "x-source": {
+    "notionPage": "https://app.notion.com/p/e1e9767f2cc5831b8ede0184a868f7a3",
+    "notionDataSource": "collection://d119767f-2cc5-8319-ad86-872941333446",
+    "migratedAt": "2026-10-14"
+  }
+}
