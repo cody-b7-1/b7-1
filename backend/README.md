@@ -15,7 +15,19 @@
 docker compose up -d --build
 ```
 
-## 3. Database Migration
+## 3. API specification
+
+FastAPI generates the API specification from implemented routes and Pydantic
+models. With the backend running, use the following endpoints:
+
+- Swagger UI: `http://localhost:8000/docs`
+- OpenAPI JSON for frontend integration: `http://localhost:8000/openapi.json`
+
+Development-only APIs, including `POST /dev/test-auth`, are included only when
+`APP_ENV=development`. Its OpenAPI definition explicitly documents `200` and
+`500` responses.
+
+## 4. Database Migration
 
 `backend/` 디렉터리에서 실행합니다. MariaDB가 실행 중이어야 합니다.
 

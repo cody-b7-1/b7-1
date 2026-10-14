@@ -62,7 +62,22 @@ class DevTestAuthTests(unittest.TestCase):
         )
 
     def test_route_is_registered_in_local_development(self) -> None:
-        self.assertIn("/dev/test-auth", app.openapi()["paths"])
+        operation = app.openapi()["paths"]["/dev/test-auth"]["post"]
+
+        self.assertEqual(operation["responses"]["200"]["description"], "Successful Response")
+        self.assertIn("500", operation["responses"])
+        self.assertEqual(
+            operation["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/TestAuthErrorResponse",
+        )
+        self.assertEqual(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/TestAuthResponse",
+        )
+
+    def test_docs_and_openapi_endpoints_are_enabled(self) -> None:
+        self.assertEqual(app.docs_url, "/docs")
+        self.assertEqual(app.openapi_url, "/openapi.json")
 
     def test_route_is_not_registered_in_production(self) -> None:
         environment = os.environ.copy()

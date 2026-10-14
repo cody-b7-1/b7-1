@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,13 +19,50 @@ router = APIRouter(prefix="/dev", tags=["development"])
 
 
 class TestAuthResponse(BaseModel):
+    """JWT issued by the local-development test authentication endpoint."""
 
-    user_id: str = Field(serialization_alias="userId")
-    access_token: str = Field(serialization_alias="accessToken")
-    token_type: str = Field(serialization_alias="tokenType")
+    model_config = ConfigDict(populate_by_name=True)
 
-#test용 jwt 토큰 생성
-@router.post("/test-auth", response_model=TestAuthResponse)
+    user_id: str = Field(
+        serialization_alias="userId",
+        description="Development test user's UUID.",
+    )
+    access_token: str = Field(
+        serialization_alias="accessToken",
+        description="JWT access token for calling authenticated APIs.",
+    )
+    token_type: str = Field(
+        serialization_alias="tokenType",
+        description="Authentication scheme for the access token.",
+        examples=["bearer"],
+    )
+
+
+class TestAuthErrorResponse(BaseModel):
+    """Error body documented for failures while issuing a test JWT."""
+
+    detail: str = Field(
+        description="Reason the development test JWT could not be issued.",
+        examples=["JWT_SECRET_KEY must be set before issuing access tokens"],
+    )
+
+
+@router.post(
+    "/test-auth",
+    response_model=TestAuthResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Issue a development test JWT",
+    description=(
+        "Creates or reuses the local development test user and returns an access token. "
+        "This endpoint is registered only when APP_ENV is development."
+    ),
+    responses={
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "model": TestAuthErrorResponse,
+            "description": "The test user or JWT could not be created.",
+        }
+    },
+)
 def issue_test_access_token(db: Session = Depends(get_db)) -> TestAuthResponse:
    
     #scalar : SQLAlchemy Session 객체가 가진 메서드 
