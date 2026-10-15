@@ -15,34 +15,32 @@ from app.db.session import get_db
 
 TEST_USER_EMAIL = "dev-test@philo.local"
 
-router = APIRouter(prefix="/dev", tags=["development"])
+router = APIRouter(prefix="/dev", tags=["개발"])
 
 
 class TestAuthResponse(BaseModel):
-    """JWT issued by the local-development test authentication endpoint."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     user_id: str = Field(
         serialization_alias="userId",
-        description="Development test user's UUID.",
+        description="개발용 테스트 사용자의 UUID입니다.",
     )
     access_token: str = Field(
         serialization_alias="accessToken",
-        description="JWT access token for calling authenticated APIs.",
+        description="인증이 필요한 API 호출용 JWT 액세스 토큰입니다.",
     )
     token_type: str = Field(
         serialization_alias="tokenType",
-        description="Authentication scheme for the access token.",
+        description="액세스 토큰의 인증 방식입니다.",
         examples=["bearer"],
     )
 
 
 class TestAuthErrorResponse(BaseModel):
-    """Error body documented for failures while issuing a test JWT."""
 
     detail: str = Field(
-        description="Reason the development test JWT could not be issued.",
+        description="개발용 테스트 JWT를 발급하지 못한 이유입니다.",
         examples=["JWT_SECRET_KEY must be set before issuing access tokens"],
     )
 
@@ -51,15 +49,16 @@ class TestAuthErrorResponse(BaseModel):
     "/test-auth",
     response_model=TestAuthResponse,
     status_code=status.HTTP_200_OK,
-    summary="Issue a development test JWT",
+    summary="개발용 테스트 JWT 발급",
     description=(
-        "Creates or reuses the local development test user and returns an access token. "
-        "This endpoint is registered only when APP_ENV is development."
+        "로컬 개발용 테스트 사용자를 생성하거나 재사용하고 액세스 토큰을 반환합니다. 이 "
+        "엔드포인트는 APP_ENV가 local일 때만 등록됩니다."
     ),
     responses={
+        status.HTTP_200_OK: {"description": "개발용 테스트 JWT 발급에 성공했습니다."},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {
             "model": TestAuthErrorResponse,
-            "description": "The test user or JWT could not be created.",
+            "description": "테스트 사용자 또는 JWT를 생성하지 못했습니다.",
         }
     },
 )

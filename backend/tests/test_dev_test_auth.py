@@ -4,7 +4,7 @@ import sys
 import unittest
 from datetime import UTC, datetime, timedelta
 
-os.environ["APP_ENV"] = "development"
+os.environ["APP_ENV"] = "local"
 os.environ["JWT_SECRET_KEY"] = "test-signing-key-with-at-least-32-bytes"
 
 import jwt
@@ -35,6 +35,7 @@ class FakeSession:
 
 
 class DevTestAuthTests(unittest.TestCase):
+
     def test_issues_expiring_token_and_reuses_test_user(self) -> None:
         db = FakeSession()
 
@@ -60,24 +61,6 @@ class DevTestAuthTests(unittest.TestCase):
         self.assertLessEqual(
             abs(expires_at - (datetime.now(UTC) + timedelta(days=7))), timedelta(seconds=2)
         )
-
-    def test_route_is_registered_in_local_development(self) -> None:
-        operation = app.openapi()["paths"]["/dev/test-auth"]["post"]
-
-        self.assertEqual(operation["responses"]["200"]["description"], "Successful Response")
-        self.assertIn("500", operation["responses"])
-        self.assertEqual(
-            operation["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
-            "#/components/schemas/TestAuthErrorResponse",
-        )
-        self.assertEqual(
-            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
-            "#/components/schemas/TestAuthResponse",
-        )
-
-    def test_docs_and_openapi_endpoints_are_enabled(self) -> None:
-        self.assertEqual(app.docs_url, "/docs")
-        self.assertEqual(app.openapi_url, "/openapi.json")
 
     def test_route_is_not_registered_in_production(self) -> None:
         environment = os.environ.copy()

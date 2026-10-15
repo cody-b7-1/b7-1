@@ -15,13 +15,13 @@
 docker compose up -d --build
 ```
 
-## 3. API specification
+## 3. API 명세서 
 
-FastAPI generates the API specification from implemented routes and Pydantic
-models. With the backend running, use the following endpoints:
+backend 실행 상태에서 접근합니다. 
+*2번 실행 방법 참고 
 
 - Swagger UI: `http://localhost:8000/docs`
-- OpenAPI JSON for frontend integration: `http://localhost:8000/openapi.json`
+- OpenAPI JSON : `http://localhost:8000/openapi.json`
 
 
 ## 4. Database Migration

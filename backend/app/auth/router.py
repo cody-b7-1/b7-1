@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.core.config import settings
 
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["인증"])
 ACCESS_TOKEN_EXPIRES_IN_SECONDS = int(
     timedelta(days=settings.jwt_access_token_expire_days).total_seconds()
 )
@@ -21,7 +21,7 @@ class SignUpRequest(BaseModel):
         Field(
             max_length=254,
             json_schema_extra={"format": "email"},
-            description="Member email address.",
+            description="회원 이메일 주소입니다.",
             examples=["user@example.com"],
         ),
     ]
@@ -29,12 +29,12 @@ class SignUpRequest(BaseModel):
         str,
         Field(
             max_length=50,
-            description="User nickname.",
+            description="회원 닉네임입니다.",
             examples=["철학탐험가"],
         ),
     ]
     password: str = Field(
-        description="Password sent over HTTPS.",
+        description="HTTPS로 전송하는 비밀번호입니다.",
         examples=["password123!"],
     )
 
@@ -46,12 +46,12 @@ class LoginRequest(BaseModel):
         EmailStr,
         Field(
             max_length=254,
-            description="Member email address.",
+            description="회원 이메일 주소입니다.",
             examples=["user@example.com"],
         ),
     ]
     password: str = Field(
-        description="Password sent over HTTPS.",
+        description="HTTPS로 전송하는 비밀번호입니다.",
         examples=["password123!"],
     )
 
@@ -63,7 +63,7 @@ class EmailSendRequest(BaseModel):
         EmailStr,
         Field(
             max_length=254,
-            description="Member email address.",
+            description="회원 이메일 주소입니다.",
             examples=["user@example.com"],
         ),
     ]
@@ -73,7 +73,7 @@ class EmailVerifyRequest(BaseModel):
     """Request contract for verifying an email-verification-link token."""
 
     token: str = Field(
-        description="Token obtained from the email verification link.",
+        description="이메일 인증 링크에서 받은 토큰입니다.",
         examples=["opaque-one-time-token"],
     )
 
@@ -85,17 +85,17 @@ class LoginResponse(BaseModel):
 
     access_token: str = Field(
         serialization_alias="accessToken",
-        description="JWT access token.",
+        description="JWT 액세스 토큰입니다.",
         examples=["eyJhbGciOi..."],
     )
     token_type: Literal["Bearer"] = Field(
         serialization_alias="tokenType",
-        description="Authentication scheme for the access token.",
+        description="액세스 토큰의 인증 방식입니다.",
         examples=["Bearer"],
     )
     expires_in: int = Field(
         serialization_alias="expiresIn",
-        description="Access-token lifetime in seconds.",
+        description="액세스 토큰의 유효 기간(초)입니다.",
         examples=[ACCESS_TOKEN_EXPIRES_IN_SECONDS],
     )
 
@@ -105,25 +105,23 @@ class LoginResponse(BaseModel):
     status_code=status.HTTP_201_CREATED,
     response_model=None,
     response_class=Response,
-    summary="Sign up",
-    description="Creates an unverified account from an email address and password.",
+    summary="회원가입",
+    description="이메일 주소와 비밀번호로 계정을 생성합니다.",
     responses={
         status.HTTP_201_CREATED: {
-            "description": "Sign-up succeeded. The email address is unverified.",
+            "description": "회원가입에 성공했습니다.",
         },
         status.HTTP_409_CONFLICT: {
-            "description": "The email is already registered to an account that has not been deleted.",
+            "description": "삭제되지 않은 계정에 이미 등록된 이메일 주소입니다.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
-            "description": "The request is missing required values or has invalid field values.",
+            "description": "필수 요청 값이 없거나 필드 값이 올바르지 않습니다.",
         },
     },
 )
 def sign_up(request: SignUpRequest) -> None:
     """Declare the sign-up API contract; registration behavior is not implemented yet."""
 
-    # The persistence, duplicate-email check, password hashing, and email verification
-    # workflow are intentionally deferred.
     return None
 
 
@@ -131,29 +129,29 @@ def sign_up(request: SignUpRequest) -> None:
     "/login",
     response_model=LoginResponse,
     status_code=status.HTTP_200_OK,
-    summary="Log in",
-    description="Logs in with an email address and password.",
+    summary="로그인",
+    description="이메일 주소와 비밀번호로 로그인합니다.",
     responses={
         status.HTTP_200_OK: {
-            "description": "Login succeeded.",
+            "description": "로그인에 성공했습니다. 액세스 토큰을 응답 본문으로 반환하고 리프레시 토큰 쿠키를 설정합니다.",
             "headers": {
                 "Set-Cookie": {
                     "description": (
-                        "Refresh token cookie with HttpOnly, Secure, SameSite=Lax, "
-                        "and Path=/auth attributes."
+                        "HttpOnly, Secure, SameSite=Lax, Path=/auth 속성을 가진 "
+                        "리프레시 토큰 쿠키입니다."
                     ),
                     "schema": {"type": "string"},
                 }
             },
         },
         status.HTTP_401_UNAUTHORIZED: {
-            "description": "The email address or password does not match.",
+            "description": "이메일 주소 또는 비밀번호가 일치하지 않습니다.",
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "The email is unverified, or the account is inactive or deleted.",
+            "description": "이메일이 인증되지 않았거나 계정이 비활성 또는 삭제 상태입니다.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
-            "description": "The request has invalid or missing values.",
+            "description": "요청 값이 올바르지 않거나 누락되었습니다.",
         },
     },
 )
@@ -169,20 +167,20 @@ def login(request: LoginRequest) -> None:
     status_code=status.HTTP_202_ACCEPTED,
     response_model=None,
     response_class=Response,
-    summary="Send email verification link",
+    summary="이메일 인증 링크 발송",
     description=(
-        "Accepts a request to send an email-verification link. The same response is "
-        "returned regardless of whether the account exists or is already verified."
+        "이메일 인증 링크 발송 요청을 접수합니다. 계정 존재 여부나 기존 인증 여부와 관계없이 "
+        "동일한 응답을 반환합니다."
     ),
     responses={
         status.HTTP_202_ACCEPTED: {
-            "description": "The email-verification-link sending request was accepted.",
+            "description": "이메일 인증 링크 발송 요청을 접수했습니다.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
-            "description": "The email is missing or has an invalid format.",
+            "description": "이메일이 누락되었거나 형식이 올바르지 않습니다.",
         },
         status.HTTP_429_TOO_MANY_REQUESTS: {
-            "description": "The email-verification-link sending rate limit was exceeded.",
+            "description": "이메일 인증 링크 발송 요청 한도를 초과했습니다.",
         },
     },
 )
@@ -195,26 +193,26 @@ def send_email_verification_link(request: EmailSendRequest) -> None:
 
 @router.post(
     "/email/verify",
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     response_class=Response,
-    summary="Verify email link token",
+    summary="이메일 인증 토큰 검증",
     description=(
-        "Verifies the token received by the frontend from /verify-email?token=... and "
-        "sent in this request body."
+        "프런트엔드가 인증 링크에 포함된 토큰을 요청 본문으로 전송하면 해당 토큰을 "
+        "검증합니다."
     ),
     responses={
-        status.HTTP_200_OK: {
-            "description": "Email verification succeeded.",
+        status.HTTP_204_NO_CONTENT: {
+            "description": "이메일 인증에 성공했습니다.",
         },
         status.HTTP_400_BAD_REQUEST: {
-            "description": "The token is invalid, expired, used, or invalidated.",
+            "description": "토큰이 올바르지 않거나 만료·사용·무효화되었습니다.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
-            "description": "The token is missing or has an invalid type.",
+            "description": "토큰이 누락되었거나 타입이 올바르지 않습니다.",
         },
         status.HTTP_429_TOO_MANY_REQUESTS: {
-            "description": "The email-verification request rate limit was exceeded.",
+            "description": "이메일 인증 요청 한도를 초과했습니다.",
         },
     },
 )
@@ -229,10 +227,10 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
     "/refresh",
     response_model=LoginResponse,
     status_code=status.HTTP_200_OK,
-    summary="Refresh access token",
+    summary="액세스 토큰 갱신",
     description=(
-        "Issues a new access token from the HttpOnly refreshToken cookie. This endpoint "
-        "does not require an access token; frontend requests must use credentials: 'include'."
+        "HttpOnly refreshToken 쿠키로 새 액세스 토큰을 발급합니다. 이 엔드포인트는 액세스 "
+        "토큰이 필요하지 않으며, 프론트엔드 요청에는 credentials: 'include'가 필요합니다."
     ),
     openapi_extra={
         "parameters": [
@@ -240,26 +238,26 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
                 "name": "refreshToken",
                 "in": "cookie",
                 "required": True,
-                "description": "HttpOnly refresh token cookie.",
+                "description": "HttpOnly 리프레시 토큰 쿠키입니다.",
                 "schema": {"type": "string"},
             }
         ]
     },
     responses={
         status.HTTP_200_OK: {
-            "description": "Access token refresh succeeded.",
+            "description": "액세스 토큰 갱신에 성공했습니다.",
             "headers": {
                 "Set-Cookie": {
-                    "description": "New HttpOnly refresh token cookie.",
+                    "description": "새 HttpOnly 리프레시 토큰 쿠키입니다.",
                     "schema": {"type": "string"},
                 }
             },
         },
         status.HTTP_401_UNAUTHORIZED: {
-            "description": "The refresh token is missing, expired, forged, invalidated, or reused.",
+            "description": "리프레시 토큰이 누락·만료·위조·무효화되었거나 재사용되었습니다.",
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "The account is unavailable, or CSRF or Origin verification failed.",
+            "description": "계정을 사용할 수 없거나 CSRF 또는 Origin 검증에 실패했습니다.",
         },
     },
 )
@@ -275,11 +273,11 @@ def refresh_access_token() -> None:
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     response_class=Response,
-    summary="Log out",
+    summary="로그아웃",
     description=(
-        "Expires the refreshToken cookie. The endpoint returns 204 even when the cookie "
-        "is missing or expired; frontend requests must use credentials: 'include' and "
-        "remove their stored access token after logout."
+        "refreshToken 쿠키를 만료 처리합니다. 쿠키가 없거나 만료되어도 204를 반환하며, "
+        "프론트엔드 요청에는 credentials: 'include'가 필요합니다. 로그아웃 후에는 저장된 "
+        "액세스 토큰을 제거해야 합니다."
     ),
     openapi_extra={
         "parameters": [
@@ -287,26 +285,26 @@ def refresh_access_token() -> None:
                 "name": "refreshToken",
                 "in": "cookie",
                 "required": True,
-                "description": "HttpOnly refresh token cookie.",
+                "description": "HttpOnly 리프레시 토큰 쿠키입니다.",
                 "schema": {"type": "string"},
             }
         ]
     },
     responses={
         status.HTTP_204_NO_CONTENT: {
-            "description": "Logout succeeded, including when the user was already logged out.",
+            "description": "이미 로그아웃된 경우를 포함해 로그아웃에 성공했습니다.",
             "headers": {
                 "Set-Cookie": {
-                    "description": "Expires the refresh token cookie.",
+                    "description": "리프레시 토큰 쿠키를 만료 처리합니다.",
                     "schema": {"type": "string"},
                 }
             },
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "Origin or CSRF verification failed.",
+            "description": "Origin 또는 CSRF 검증에 실패했습니다.",
         },
         status.HTTP_429_TOO_MANY_REQUESTS: {
-            "description": "The logout request rate limit was exceeded.",
+            "description": "로그아웃 요청 한도를 초과했습니다.",
         },
     },
 )
