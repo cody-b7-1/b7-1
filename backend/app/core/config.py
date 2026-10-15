@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,9 +24,10 @@ class Settings(BaseSettings):
     db_password: str
     db_name: str
 
-    app_env: str = "production" #app에 env 없는 경우 production 기본값
-    jwt_secret_key: str | None = None
-    jwt_algorithm: str = "HS256"
+    app_env: Literal["local", "test", "production"] = "local"
+    
+    jwt_secret_key: str = Field(min_length=32)
+    jwt_algorithm: Literal["HS256"] = "HS256"
     jwt_access_token_expire_days: int = Field(default=7, gt=0)
 
     @property
@@ -40,8 +42,8 @@ class Settings(BaseSettings):
         )
 
     @property
-    def is_local_development(self) -> bool:
-        return self.app_env == "development"
+    def is_local(self) -> bool:
+        return self.app_env == "local"
 
 
 settings = Settings()

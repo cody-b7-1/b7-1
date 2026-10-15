@@ -9,10 +9,6 @@ from app.core.config import settings
 
 
 def create_access_token(user_id: UUID, expires_delta: timedelta | None = None) -> str:
-
-    if not settings.jwt_secret_key: #signature 생성 키 
-        raise RuntimeError("JWT_SECRET_KEY must be set before issuing access tokens")
-
     now = datetime.now(UTC)
     lifetime = expires_delta or timedelta(days=settings.jwt_access_token_expire_days) #없으면 설정값으로 
     payload: dict[str, str | int] = {
