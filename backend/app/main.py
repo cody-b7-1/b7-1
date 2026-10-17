@@ -20,13 +20,13 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-app.include_router(auth_router)
+app.include_router(auth_router, prefix="/api")
 
 
 if settings.is_local:
     from app.dev.router import router as dev_router  # 개발 환경용 JWT 발급 라우터
 
-    app.include_router(dev_router)
+    app.include_router(dev_router, prefix="/api")
 
 
 @app.get(

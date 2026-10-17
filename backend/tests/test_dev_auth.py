@@ -89,7 +89,7 @@ class DevAuthTests(unittest.TestCase):
                 sys.executable,
                 "-c",
                 "from app.main import app; "
-                "assert '/dev/auth' not in app.openapi()['paths']",
+                "assert '/api/dev/auth' not in app.openapi()['paths']",
             ],
             cwd=os.path.dirname(os.path.dirname(__file__)),
             env=environment,
