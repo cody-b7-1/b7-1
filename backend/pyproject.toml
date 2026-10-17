@@ -8,6 +8,7 @@ dependencies = [
     "email-validator>=2.0,<3",
     "fastapi>=0.115,<1",
     "pydantic-settings>=2.0,<3",
+    "pwdlib[argon2]>=0.3,<1",
     "pymysql>=1.1,<2",
     "PyJWT>=2.10,<3",
     "sqlalchemy>=2.1,<3",

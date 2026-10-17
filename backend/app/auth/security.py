@@ -6,6 +6,7 @@ from uuid import UUID
 
 import jwt
 from jwt.exceptions import InvalidTokenError
+from pwdlib import PasswordHash
 
 from app.core.config import settings
 
@@ -14,6 +15,17 @@ ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
 TOKEN_TYPE_CLAIM = "type"
 TokenType = Literal["access", "refresh"]
+password_hasher = PasswordHash.recommended()
+
+
+def hash_password(password: str) -> str:
+    """Argon2id로 비밀번호를 해싱합니다."""
+    return password_hasher.hash(password)
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """평문 비밀번호가 저장된 Argon2id 해시와 일치하는지 검증합니다."""
+    return password_hasher.verify(password, password_hash)
 
 
 def create_token(
