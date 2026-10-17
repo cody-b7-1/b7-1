@@ -13,7 +13,7 @@ from app.auth.security import create_access_token
 from app.db.session import get_db
 
 
-DEV_USER_EMAIL = "dev@philo.local"
+DEV_USER_EMAIL = "dev@example.com"
 
 router = APIRouter(prefix="/dev", tags=["개발"])
 
