@@ -3,12 +3,19 @@ import subprocess
 import sys
 import unittest
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 os.environ["APP_ENV"] = "local"
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-import jwt
+from jwt.exceptions import InvalidTokenError
 
+from app.auth.security import (
+    create_access_token,
+    create_refresh_token,
+    verify_access_token,
+    verify_refresh_token,
+)
 from app.dev.router import DEV_USER_EMAIL, issue_dev_access_token
 from app.main import app
 
@@ -50,17 +57,29 @@ class DevAuthTests(unittest.TestCase):
         self.assertEqual(first.token_type, "bearer")
         self.assertEqual(first.model_dump(by_alias=True).keys(), {"userId", "accessToken", "tokenType"})
 
-        payload = jwt.decode(
-            first.access_token,
-            "dev-signing-key-with-at-least-32-bytes",
-            algorithms=["HS256"],
-        )
+        payload = verify_access_token(first.access_token)
         self.assertEqual(payload["sub"], first.user_id)
+        self.assertEqual(payload["type"], "access")
         self.assertIn("exp", payload)
         expires_at = datetime.fromtimestamp(payload["exp"], UTC)
         self.assertLessEqual(
             abs(expires_at - (datetime.now(UTC) + timedelta(days=7))), timedelta(seconds=2)
         )
+
+    def test_validates_token_types(self) -> None:
+        user_id = uuid4()
+        access_token = create_access_token(user_id)
+        refresh_token = create_refresh_token(user_id)
+
+        with self.assertRaisesRegex(InvalidTokenError, "토큰 유형이 올바르지 않습니다."):
+            verify_access_token(refresh_token)
+
+        with self.assertRaisesRegex(InvalidTokenError, "토큰 유형이 올바르지 않습니다."):
+            verify_refresh_token(access_token)
+
+        payload = verify_refresh_token(refresh_token)
+        self.assertEqual(payload["sub"], str(user_id))
+        self.assertEqual(payload["type"], "refresh")
 
     def test_route_is_not_registered_in_production(self) -> None:
         environment = os.environ.copy()
