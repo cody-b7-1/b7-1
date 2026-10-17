@@ -9,7 +9,7 @@ __pycache__/
 venv/
 env/
 ENV/
-.uv_cache/
+.uv-cache/
 
 # Environment files and private credentials
 .env

@@ -5,9 +5,11 @@ description = "Philo backend API"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.14,<2",
+    "email-validator>=2.0,<3",
     "fastapi>=0.115,<1",
     "pydantic-settings>=2.0,<3",
     "pymysql>=1.1,<2",
+    "PyJWT>=2.10,<3",
     "sqlalchemy>=2.1,<3",
     "uvicorn>=0.30,<1",
 ]

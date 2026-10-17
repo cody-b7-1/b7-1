@@ -15,7 +15,16 @@
 docker compose up -d --build
 ```
 
-## 3. Database Migration
+## 3. API 명세서 
+
+backend 실행 상태에서 접근합니다. 
+*2번 실행 방법 참고 
+
+- Swagger UI: `http://localhost:8000/docs`
+- OpenAPI JSON : `http://localhost:8000/openapi.json`
+
+
+## 4. Database Migration
 
 `backend/` 디렉터리에서 실행합니다. MariaDB가 실행 중이어야 합니다.
 
