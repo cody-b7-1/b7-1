@@ -24,7 +24,7 @@ app.include_router(auth_router)
 
 
 if settings.is_local:
-    from app.dev.router import router as dev_router #dev 환경에서 test jwt 생성용 router 추가 
+    from app.dev.router import router as dev_router  # 개발 환경용 JWT 발급 라우터
 
     app.include_router(dev_router)
 

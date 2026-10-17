@@ -5,11 +5,11 @@ import unittest
 from datetime import UTC, datetime, timedelta
 
 os.environ["APP_ENV"] = "local"
-os.environ["JWT_SECRET_KEY"] = "test-signing-key-with-at-least-32-bytes"
+os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
 import jwt
 
-from app.dev.router import TEST_USER_EMAIL, issue_test_access_token
+from app.dev.router import DEV_USER_EMAIL, issue_dev_access_token
 from app.main import app
 
 
@@ -34,16 +34,16 @@ class FakeSession:
         pass
 
 
-class DevTestAuthTests(unittest.TestCase):
+class DevAuthTests(unittest.TestCase):
 
-    def test_issues_expiring_token_and_reuses_test_user(self) -> None:
+    def test_issues_expiring_token_and_reuses_dev_user(self) -> None:
         db = FakeSession()
 
-        first = issue_test_access_token(db)
-        second = issue_test_access_token(db)
+        first = issue_dev_access_token(db)
+        second = issue_dev_access_token(db)
 
         self.assertEqual(db.add_calls, 1)
-        self.assertEqual(db.user.email, TEST_USER_EMAIL)
+        self.assertEqual(db.user.email, DEV_USER_EMAIL)
         self.assertTrue(db.user.is_active)
         self.assertIsNotNone(db.user.email_verified_at)
         self.assertEqual(first.user_id, second.user_id)
@@ -52,7 +52,7 @@ class DevTestAuthTests(unittest.TestCase):
 
         payload = jwt.decode(
             first.access_token,
-            "test-signing-key-with-at-least-32-bytes",
+            "dev-signing-key-with-at-least-32-bytes",
             algorithms=["HS256"],
         )
         self.assertEqual(payload["sub"], first.user_id)
@@ -70,7 +70,7 @@ class DevTestAuthTests(unittest.TestCase):
                 sys.executable,
                 "-c",
                 "from app.main import app; "
-                "assert '/dev/test-auth' not in app.openapi()['paths']",
+                "assert '/dev/auth' not in app.openapi()['paths']",
             ],
             cwd=os.path.dirname(os.path.dirname(__file__)),
             env=environment,

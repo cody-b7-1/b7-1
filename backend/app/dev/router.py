@@ -13,18 +13,18 @@ from app.auth.security import create_access_token
 from app.db.session import get_db
 
 
-TEST_USER_EMAIL = "dev-test@philo.local"
+DEV_USER_EMAIL = "dev@philo.local"
 
 router = APIRouter(prefix="/dev", tags=["개발"])
 
 
-class TestAuthResponse(BaseModel):
+class DevAuthResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
     user_id: str = Field(
         serialization_alias="userId",
-        description="개발용 테스트 사용자의 UUID입니다.",
+        description="개발용 사용자의 UUID입니다.",
     )
     access_token: str = Field(
         serialization_alias="accessToken",
@@ -37,44 +37,44 @@ class TestAuthResponse(BaseModel):
     )
 
 
-class TestAuthErrorResponse(BaseModel):
+class DevAuthErrorResponse(BaseModel):
 
     detail: str = Field(
-        description="개발용 테스트 JWT를 발급하지 못한 이유입니다.",
+        description="개발용 JWT를 발급하지 못한 이유입니다.",
         examples=["JWT_SECRET_KEY must be set before issuing access tokens"],
     )
 
 
 @router.post(
-    "/test-auth",
-    response_model=TestAuthResponse,
+    "/auth",
+    response_model=DevAuthResponse,
     status_code=status.HTTP_200_OK,
-    summary="개발용 테스트 JWT 발급",
+    summary="개발용 JWT 발급",
     description=(
-        "로컬 개발용 테스트 사용자를 생성하거나 재사용하고 액세스 토큰을 반환합니다. 이 "
+        "로컬 개발용 사용자를 생성하거나 재사용하고 액세스 토큰을 반환합니다. 이 "
         "엔드포인트는 APP_ENV가 local일 때만 등록됩니다."
     ),
     responses={
-        status.HTTP_200_OK: {"description": "개발용 테스트 JWT 발급에 성공했습니다."},
+        status.HTTP_200_OK: {"description": "개발용 JWT 발급에 성공했습니다."},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {
-            "model": TestAuthErrorResponse,
-            "description": "테스트 사용자 또는 JWT를 생성하지 못했습니다.",
+            "model": DevAuthErrorResponse,
+            "description": "개발용 사용자 또는 JWT를 생성하지 못했습니다.",
         }
     },
 )
-def issue_test_access_token(db: Session = Depends(get_db)) -> TestAuthResponse:
+def issue_dev_access_token(db: Session = Depends(get_db)) -> DevAuthResponse:
    
     #scalar : SQLAlchemy Session 객체가 가진 메서드 
     user = db.scalar(
-        select(User).where(User.email == TEST_USER_EMAIL, User.deleted_at.is_(None))
+        select(User).where(User.email == DEV_USER_EMAIL, User.deleted_at.is_(None))
     )
     #user 생성
     if user is None:
         user = User(
             user_id=uuid4(),
-            email=TEST_USER_EMAIL,
-            nickname="Development Test User",
-            password_hash="!development-test-user-no-password!",
+            email=DEV_USER_EMAIL,
+            nickname="Development User",
+            password_hash="!development-user-no-password!",
             role=Role.USER,
             is_active=True,
             email_verified_at=datetime.now(UTC).replace(tzinfo=None),
@@ -88,7 +88,7 @@ def issue_test_access_token(db: Session = Depends(get_db)) -> TestAuthResponse:
 
     db.commit()
 
-    return TestAuthResponse(
+    return DevAuthResponse(
         user_id=str(user.user_id),
         access_token=create_access_token(user.user_id),
         token_type="bearer",
