@@ -1,24 +1,39 @@
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.auth.models.refresh_token import RefreshToken
 from app.auth.models.user import Role, User
 from app.auth.schemas import LoginRequest, SignUpRequest
-from app.auth.security import hash_password, verify_password
+from app.auth.security import (
+    create_access_token,
+    create_refresh_token,
+    hash_password,
+    verify_password,
+)
+from app.core.config import settings
 
 
 class EmailAlreadyRegisteredError(Exception):
     """Raised when an active account already uses the requested email address."""
 
 
-class InvalidCredentialsError(Exception):
-    """Raised when the supplied email and password do not identify a user."""
+class EmailNotFoundError(Exception):
+    """Raised when no account uses the supplied email address."""
 
 
-class LoginUnavailableError(Exception):
-    """Raised when an account exists but cannot be used to log in."""
+class PasswordMismatchError(Exception):
+    """Raised when the supplied password does not match the account."""
+
+class InactiveAccountError(Exception): #휴면
+    """Raised when the account has been deactivated."""
+
+
+class EmailNotVerifiedError(Exception):
+    """Raised when an otherwise usable account has not verified its email."""
 
 
 def _is_active_email_duplicate(error: IntegrityError) -> bool:
@@ -43,7 +58,7 @@ def create_user(db: Session, request: SignUpRequest) -> User:
     except IntegrityError as error:
         db.rollback()
         if _is_active_email_duplicate(error):
-            raise EmailAlreadyRegisteredError("이미 등록된 이메일 주소입니다.") from error
+            raise EmailAlreadyRegisteredError from error
         raise
 
     return user
@@ -53,21 +68,45 @@ def authenticate_user(db: Session, request: LoginRequest) -> User:
     """Authenticate an active, verified user from an email/password request."""
     email = str(request.email).lower()
     user = db.scalar(
-        select(User).where(User.email == email, User.deleted_at.is_(None))
+        select(User).where(User.email == email, User.deleted_at.is_(None)) #삭제되지 않은 user 조회 
     )
 
     if user is None:
-        deleted_user = db.scalar(
-            select(User).where(User.email == email, User.deleted_at.is_not(None))
-        )
-        if deleted_user is not None:
-            raise LoginUnavailableError("로그인할 수 없는 계정입니다.")
-        raise InvalidCredentialsError("이메일 주소 또는 비밀번호가 일치하지 않습니다.")
+        raise EmailNotFoundError
 
     if not verify_password(request.password, user.password_hash):
-        raise InvalidCredentialsError("이메일 주소 또는 비밀번호가 일치하지 않습니다.")
+        raise PasswordMismatchError
 
-    if not user.is_active or user.email_verified_at is None:
-        raise LoginUnavailableError("로그인할 수 없는 계정입니다.")
+    if not user.is_active:
+        raise InactiveAccountError
+
+    if user.email_verified_at is None:
+        raise EmailNotVerifiedError
 
     return user
+
+
+def issue_refresh_token(db: Session, user: User) -> str:
+    """Issue a refresh JWT with a jti and persist its hashed record."""
+    token_id = uuid4()
+    refresh_token = create_refresh_token(user.user_id, token_id=token_id)
+    db.add(
+        RefreshToken(
+            token_id=token_id,
+            user_id=user.user_id,
+            token_hash=hash_password(refresh_token),
+            expires_at=(
+                datetime.now(UTC) + timedelta(days=settings.jwt_refresh_token_expire_days)
+            ).replace(tzinfo=None),
+        )
+    )
+    db.commit()
+    return refresh_token
+
+
+def login_user(db: Session, request: LoginRequest) -> tuple[str, str]:
+    """Authenticate a user and issue persisted refresh and access tokens."""
+    user = authenticate_user(db, request)
+    refresh_token = issue_refresh_token(db, user)
+    access_token = create_access_token(user.user_id)
+    return access_token, refresh_token
