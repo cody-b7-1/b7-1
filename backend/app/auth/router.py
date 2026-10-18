@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.orm import Session
 
 from app.auth.schemas import (
     EmailSendRequest,
@@ -7,6 +8,8 @@ from app.auth.schemas import (
     LoginResponse,
     SignUpRequest,
 )
+from app.auth.service import EmailAlreadyRegisteredError, create_user
+from app.db.session import get_db
 
 
 router = APIRouter(prefix="/auth", tags=["인증"])
@@ -25,12 +28,25 @@ router = APIRouter(prefix="/auth", tags=["인증"])
             "description": "삭제되지 않은 계정에 이미 등록된 이메일 주소입니다.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
-            "description": "필수 요청 값이 없거나 필드 값이 올바르지 않습니다.",
+            "description": (
+                "필수 요청 값이 없거나 이메일 형식 또는 필드 값이 올바르지 않습니다. "
+                "첫 오류 요약은 detail에, 모든 오류는 errors 배열에 반환합니다."
+            ),
+        },
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "description": "회원가입 처리 중 서버 오류가 발생했습니다.",
         },
     },
 )
-def sign_up(request: SignUpRequest) -> None:
-    """Declare the sign-up API contract; registration behavior is not implemented yet."""
+def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
+    """Create a new user account."""
+    try:
+        create_user(db, request)
+    except EmailAlreadyRegisteredError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 등록된 이메일 주소입니다.",
+        ) from None
 
     return None
 
@@ -47,8 +63,8 @@ def sign_up(request: SignUpRequest) -> None:
             "headers": {
                 "Set-Cookie": {
                     "description": (
-                        "HttpOnly, Secure, SameSite=Lax, Path=/auth 속성을 가진 "
-                        "리프레시 토큰 쿠키입니다."
+                        "HTTP 전용(HttpOnly), 보안(Secure), SameSite=Lax, Path=/auth "
+                        "속성을 가진 리프레시 토큰 쿠키입니다."
                     ),
                     "schema": {"type": "string"},
                 }
@@ -139,8 +155,8 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
     status_code=status.HTTP_200_OK,
     summary="액세스 토큰 갱신",
     description=(
-        "HttpOnly refreshToken 쿠키로 새 액세스 토큰을 발급합니다. 이 엔드포인트는 액세스 "
-        "토큰이 필요하지 않으며, 프론트엔드 요청에는 credentials: 'include'가 필요합니다."
+        "HTTP 전용(HttpOnly) refreshToken 쿠키로 새 액세스 토큰을 발급합니다. 이 엔드포인트는 "
+        "액세스 토큰이 필요하지 않으며, 프런트엔드 요청에는 credentials: 'include'가 필요합니다."
     ),
     openapi_extra={
         "parameters": [
@@ -148,7 +164,7 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
                 "name": "refreshToken",
                 "in": "cookie",
                 "required": True,
-                "description": "HttpOnly 리프레시 토큰 쿠키입니다.",
+                "description": "HTTP 전용(HttpOnly) 리프레시 토큰 쿠키입니다.",
                 "schema": {"type": "string"},
             }
         ]
@@ -158,7 +174,7 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
             "description": "액세스 토큰 갱신에 성공했습니다.",
             "headers": {
                 "Set-Cookie": {
-                    "description": "새 HttpOnly 리프레시 토큰 쿠키입니다.",
+                        "description": "새 HTTP 전용(HttpOnly) 리프레시 토큰 쿠키입니다.",
                     "schema": {"type": "string"},
                 }
             },
@@ -195,7 +211,7 @@ def refresh_access_token() -> None:
                 "name": "refreshToken",
                 "in": "cookie",
                 "required": True,
-                "description": "HttpOnly 리프레시 토큰 쿠키입니다.",
+                "description": "HTTP 전용(HttpOnly) 리프레시 토큰 쿠키입니다.",
                 "schema": {"type": "string"},
             }
         ]

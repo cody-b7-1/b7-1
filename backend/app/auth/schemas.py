@@ -12,7 +12,7 @@ ACCESS_TOKEN_EXPIRES_IN_SECONDS = int(
 
 
 class SignUpRequest(BaseModel):
-    """Request contract for user registration."""
+    """회원가입 요청입니다."""
 
     email: Annotated[
         EmailStr,
@@ -26,6 +26,7 @@ class SignUpRequest(BaseModel):
     nickname: Annotated[
         str,
         Field(
+            min_length=1,
             max_length=50,
             description="회원 닉네임입니다.",
             examples=["철학탐험가"],
@@ -40,7 +41,7 @@ class SignUpRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Request contract for email-and-password login."""
+    """이메일과 비밀번호로 로그인하는 요청입니다."""
 
     email: Annotated[
         EmailStr,
@@ -59,7 +60,7 @@ class LoginRequest(BaseModel):
 
 
 class EmailSendRequest(BaseModel):
-    """Request contract for sending an email-verification link."""
+    """이메일 인증 링크 발송 요청입니다."""
 
     email: Annotated[
         EmailStr,
@@ -72,7 +73,7 @@ class EmailSendRequest(BaseModel):
 
 
 class EmailVerifyRequest(BaseModel):
-    """Request contract for verifying an email-verification-link token."""
+    """이메일 인증 링크 토큰 검증 요청입니다."""
 
     token: str = Field(
         description="이메일 인증 링크에서 받은 토큰입니다.",
@@ -81,7 +82,7 @@ class EmailVerifyRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    """Response contract returned after a successful login."""
+    """로그인 또는 액세스 토큰 갱신 성공 응답입니다."""
 
     model_config = ConfigDict(populate_by_name=True)
 

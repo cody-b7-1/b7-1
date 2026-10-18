@@ -41,7 +41,7 @@ class DevAuthErrorResponse(BaseModel):
 
     detail: str = Field(
         description="개발용 JWT를 발급하지 못한 이유입니다.",
-        examples=["JWT_SECRET_KEY must be set before issuing access tokens"],
+        examples=["액세스 토큰을 발급하려면 JWT_SECRET_KEY 설정이 필요합니다."],
     )
 
 
