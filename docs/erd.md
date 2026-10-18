@@ -45,6 +45,7 @@ erDiagram
         varchar(100) name "철학자 이름 (예: 소크라테스)"
         text prompt "시스템 페르소나 지침"
         text introduction "목록 소개 문구"
+        varchar(500) profile_image_url "프로필 이미지 URL"
         boolean is_active "노출 활성 여부 (비활성 시 기존 채팅 사용 불가, DEFAULT TRUE)"
         timestamp created_at "등록 일시"
         timestamp updated_at "수정 일시"
