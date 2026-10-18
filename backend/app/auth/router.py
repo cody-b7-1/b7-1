@@ -1,14 +1,25 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.auth.schemas import (
     EmailSendRequest,
     EmailVerifyRequest,
+    ACCESS_TOKEN_EXPIRES_IN_SECONDS,
     LoginRequest,
     LoginResponse,
     SignUpRequest,
 )
-from app.auth.service import EmailAlreadyRegisteredError, create_user
+from app.auth.security import create_access_token, create_refresh_token
+from app.auth.service import (
+    EmailAlreadyRegisteredError,
+    InvalidCredentialsError,
+    LoginUnavailableError,
+    authenticate_user,
+    create_user,
+)
+from app.core.config import settings
 from app.db.session import get_db
 
 
@@ -81,11 +92,44 @@ def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
         },
     },
 )
-def login(request: LoginRequest) -> None:
-    """Declare the login API contract; authentication behavior is not implemented yet."""
+def login(
+    request: LoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Authenticate a user and return an access token with a refresh-token cookie."""
+    try:
+        user = authenticate_user(db, request)
+    except InvalidCredentialsError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="이메일 주소 또는 비밀번호가 일치하지 않습니다.",
+        ) from None
+    except LoginUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="이메일 인증이 완료되지 않았거나 사용할 수 없는 계정입니다.",
+        ) from None
 
-    # Credential verification, JWT issuance, and refresh-cookie issuance are deferred.
-    return None
+    refresh_token = create_refresh_token(user.user_id)
+    refresh_token_max_age = int(
+        timedelta(days=settings.jwt_refresh_token_expire_days).total_seconds()
+    )
+    response.set_cookie(
+        key="refreshToken",
+        value=refresh_token,
+        max_age=refresh_token_max_age,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/auth",
+    )
+
+    return LoginResponse(
+        access_token=create_access_token(user.user_id),
+        token_type="Bearer",
+        expires_in=ACCESS_TOKEN_EXPIRES_IN_SECONDS,
+    )
 
 
 @router.post(
