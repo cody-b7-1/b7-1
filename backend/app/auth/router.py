@@ -11,13 +11,14 @@ from app.auth.schemas import (
     LoginResponse,
     SignUpRequest,
 )
-from app.auth.security import create_access_token, create_refresh_token
 from app.auth.service import (
     EmailAlreadyRegisteredError,
-    InvalidCredentialsError,
-    LoginUnavailableError,
-    authenticate_user,
+    EmailNotVerifiedError,
+    EmailNotFoundError,
+    InactiveAccountError,
+    PasswordMismatchError,
     create_user,
+    login_user,
 )
 from app.core.config import settings
 from app.db.session import get_db
@@ -85,7 +86,7 @@ def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
             "description": "이메일 주소 또는 비밀번호가 일치하지 않습니다.",
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "이메일이 인증되지 않았거나 계정이 비활성 또는 삭제 상태입니다.",
+            "description": "이메일 미인증 계정 또는 사용할 수 없는 계정입니다.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "요청 값이 올바르지 않거나 누락되었습니다.",
@@ -99,19 +100,24 @@ def login(
 ) -> LoginResponse:
     """Authenticate a user and return an access token with a refresh-token cookie."""
     try:
-        user = authenticate_user(db, request)
-    except InvalidCredentialsError:
+        access_token, refresh_token = login_user(db, request)
+    except (EmailNotFoundError, PasswordMismatchError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="이메일 주소 또는 비밀번호가 일치하지 않습니다.",
+            detail="이메일 주소 또는 비밀번호가 일치하지 않습니다.", #어떤 내용이 틀렸는지 명확히 알려주지 않음 
         ) from None
-    except LoginUnavailableError:
+    except InactiveAccountError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="이메일 인증이 완료되지 않았거나 사용할 수 없는 계정입니다.",
+            detail="사용할 수 없는 계정입니다.",
+        ) from None
+    except EmailNotVerifiedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="이메일 인증이 완료되지 않은 계정입니다.",
         ) from None
 
-    refresh_token = create_refresh_token(user.user_id)
+    #브라우저 저장 기간
     refresh_token_max_age = int(
         timedelta(days=settings.jwt_refresh_token_expire_days).total_seconds()
     )
@@ -122,11 +128,11 @@ def login(
         httponly=True,
         secure=True,
         samesite="lax",
-        path="/auth",
+        path="/api/auth",
     )
 
     return LoginResponse(
-        access_token=create_access_token(user.user_id),
+        access_token=access_token,
         token_type="Bearer",
         expires_in=ACCESS_TOKEN_EXPIRES_IN_SECONDS,
     )
