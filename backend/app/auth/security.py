@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import jwt
 from jwt.exceptions import InvalidTokenError
@@ -32,6 +32,7 @@ def create_token(
     user_id: UUID,
     token_type: TokenType,
     expires_delta: timedelta,
+    token_id: UUID | None = None,
 ) -> str:
     """지정한 유형과 유효 기간으로 JWT를 생성합니다."""
     now = datetime.now(UTC)
@@ -41,6 +42,8 @@ def create_token(
         "exp": int((now + expires_delta).timestamp()),
         TOKEN_TYPE_CLAIM: token_type,
     }
+    if token_id is not None:
+        payload["jti"] = str(token_id)
 
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
@@ -54,12 +57,18 @@ def create_access_token(user_id: UUID, expires_delta: timedelta | None = None) -
     )
 
 
-def create_refresh_token(user_id: UUID, expires_delta: timedelta | None = None) -> str:
+def create_refresh_token(
+    user_id: UUID,
+    expires_delta: timedelta | None = None,
+    *,
+    token_id: UUID | None = None,
+) -> str:
     """리프레시 토큰을 생성합니다."""
     return create_token(
         user_id,
         REFRESH_TOKEN_TYPE,
         expires_delta or timedelta(days=settings.jwt_refresh_token_expire_days),
+        token_id or uuid4(),
     )
 
 
