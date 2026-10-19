@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     db_password: str
     db_name: str
 
-    app_env: Literal["local", "test", "production"] = "local"
-    
+    app_env: Annotated[Literal["local", "test", "production"], Field()] = "local"
+
     jwt_secret_key: str = Field(min_length=32)
     jwt_algorithm: Literal["HS256"] = "HS256"
     jwt_access_token_expire_days: int = Field(default=7, gt=0)
