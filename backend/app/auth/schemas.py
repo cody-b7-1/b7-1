@@ -1,14 +1,6 @@
-from datetime import timedelta
-from typing import Annotated, Literal
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
-
-from app.core.config import settings
-
-
-ACCESS_TOKEN_EXPIRES_IN_SECONDS = int(
-    timedelta(days=settings.jwt_access_token_expire_days).total_seconds()
-)
+from pydantic import BaseModel, EmailStr, Field
 
 EmailAddress = Annotated[
     EmailStr,
@@ -77,33 +69,3 @@ class EmailVerifyRequest(BaseModel):
         ),
     ]
 
-
-class LoginResponse(BaseModel):
-    """로그인 또는 액세스 토큰 갱신 성공 응답입니다."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    access_token: Annotated[
-        str,
-        Field(
-            serialization_alias="accessToken",
-            description="JWT 액세스 토큰입니다.",
-            examples=["eyJhbGciOi..."],
-        ),
-    ]
-    token_type: Annotated[
-        Literal["Bearer"],
-        Field(
-            serialization_alias="tokenType",
-            description="액세스 토큰의 인증 방식입니다.",
-            examples=["Bearer"],
-        ),
-    ]
-    expires_in: Annotated[
-        int,
-        Field(
-            serialization_alias="expiresIn",
-            description="액세스 토큰의 유효 기간(초)입니다.",
-            examples=[ACCESS_TOKEN_EXPIRES_IN_SECONDS],
-        ),
-    ]

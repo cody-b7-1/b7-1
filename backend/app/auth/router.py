@@ -5,7 +5,6 @@ from app.auth.schemas import (
     EmailSendRequest,
     EmailVerifyRequest,
     LoginRequest,
-    LoginResponse,
     SignUpRequest,
 )
 from app.auth.service import EmailAlreadyRegisteredError, create_user
@@ -53,18 +52,24 @@ def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
 
 @router.post(
     "/login",
-    response_model=LoginResponse,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    response_class=Response,
     summary="로그인",
-    description="이메일 주소와 비밀번호로 로그인합니다.",
+    description=(
+        "이메일 주소와 비밀번호로 로그인하고, HTTP 전용(HttpOnly) accessToken 및 "
+        "refreshToken 쿠키를 설정합니다. 응답 본문은 반환하지 않습니다."
+    ),
     responses={
-        status.HTTP_200_OK: {
-            "description": "로그인에 성공했습니다. 액세스 토큰을 응답 본문으로 반환하고 리프레시 토큰 쿠키를 설정합니다.",
+        status.HTTP_204_NO_CONTENT: {
+            "description": "로그인에 성공했습니다. accessToken 및 refreshToken 쿠키를 설정합니다.",
             "headers": {
                 "Set-Cookie": {
                     "description": (
-                        "HTTP 전용(HttpOnly), 보안(Secure), SameSite=Lax, Path=/auth "
-                        "속성을 가진 리프레시 토큰 쿠키입니다."
+                        "accessToken 쿠키는 HTTP 전용(HttpOnly), 보안(Secure), SameSite=Lax, "
+                        "Path=/ 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
+                        "속성을 가집니다. 각 쿠키는 "
+                        "별도의 Set-Cookie 헤더로 반환합니다."
                     ),
                     "schema": {"type": "string"},
                 }
@@ -84,7 +89,8 @@ def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
 def login(request: LoginRequest) -> None:
     """Declare the login API contract; authentication behavior is not implemented yet."""
 
-    # Credential verification, JWT issuance, and refresh-cookie issuance are deferred.
+    # Credential verification and JWT issuance are deferred.
+    # On success, accessToken and refreshToken will be issued as cookies.
     return None
 
 
@@ -151,12 +157,14 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
 
 @router.post(
     "/refresh",
-    response_model=LoginResponse,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    response_class=Response,
     summary="액세스 토큰 갱신",
     description=(
-        "HTTP 전용(HttpOnly) refreshToken 쿠키로 새 액세스 토큰을 발급합니다. 이 엔드포인트는 "
-        "액세스 토큰이 필요하지 않으며, 프런트엔드 요청에는 credentials: 'include'가 필요합니다."
+        "HTTP 전용(HttpOnly) refreshToken 쿠키로 accessToken과 refreshToken을 갱신합니다. "
+        "갱신된 토큰은 쿠키로 설정하며 응답 본문은 반환하지 않습니다. 이 엔드포인트는 액세스 "
+        "토큰이 필요하지 않으며, 서로 다른 origin인 경우 프런트엔드 요청에는 credentials: 'include'가 필요합니다."
     ),
     openapi_extra={
         "parameters": [
@@ -170,11 +178,16 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
         ]
     },
     responses={
-        status.HTTP_200_OK: {
-            "description": "액세스 토큰 갱신에 성공했습니다.",
+        status.HTTP_204_NO_CONTENT: {
+            "description": "accessToken 및 refreshToken 갱신에 성공했습니다.",
             "headers": {
                 "Set-Cookie": {
-                        "description": "새 HTTP 전용(HttpOnly) 리프레시 토큰 쿠키입니다.",
+                    "description": (
+                        "accessToken 쿠키는 HTTP 전용(HttpOnly), 보안(Secure), SameSite=Lax, "
+                        "Path=/ 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
+                        "속성을 가집니다. 각 쿠키는 "
+                        "별도의 Set-Cookie 헤더로 반환합니다."
+                    ),
                     "schema": {"type": "string"},
                 }
             },
@@ -191,6 +204,7 @@ def refresh_access_token() -> None:
     """Declare the token-refresh contract; refresh behavior is not implemented yet."""
 
     # Cookie validation, token rotation, JWT issuance, and CSRF/Origin checks are deferred.
+    # On success, accessToken and refreshToken will be issued as cookies.
     return None
 
 
@@ -201,16 +215,16 @@ def refresh_access_token() -> None:
     response_class=Response,
     summary="로그아웃",
     description=(
-        "refreshToken 쿠키를 만료 처리합니다. 쿠키가 없거나 만료되어도 204를 반환하며, "
-        "프론트엔드 요청에는 credentials: 'include'가 필요합니다. 로그아웃 후에는 저장된 "
-        "액세스 토큰을 제거해야 합니다."
+        "accessToken 및 refreshToken 쿠키를 모두 만료 처리합니다. 쿠키가 없거나 만료되어도 "
+        "204를 반환하며, 서로 다른 origin인 경우 프런트엔드 요청에는 credentials: 'include'가 필요합니다. "
+        "refreshToken의 서버 측 무효화는 추후 실제 구현에서 처리합니다."
     ),
     openapi_extra={
         "parameters": [
             {
                 "name": "refreshToken",
                 "in": "cookie",
-                "required": True,
+                "required": False,
                 "description": "HTTP 전용(HttpOnly) 리프레시 토큰 쿠키입니다.",
                 "schema": {"type": "string"},
             }
@@ -221,7 +235,10 @@ def refresh_access_token() -> None:
             "description": "이미 로그아웃된 경우를 포함해 로그아웃에 성공했습니다.",
             "headers": {
                 "Set-Cookie": {
-                    "description": "리프레시 토큰 쿠키를 만료 처리합니다.",
+                    "description": (
+                        "accessToken(Path=/) 및 refreshToken(Path=/api/auth) HTTP 전용 "
+                        "쿠키를 각각 별도의 Set-Cookie 헤더로 만료 처리합니다."
+                    ),
                     "schema": {"type": "string"},
                 }
             },
