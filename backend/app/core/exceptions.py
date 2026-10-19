@@ -59,15 +59,16 @@ def _validation_error_message(validation_error: dict) -> str:
         message = REQUIRED_FIELD_MESSAGES.get(field_name)
         if message:
             return message
-    if error_type in {"string_too_short", "string_too_long"}:
-        field = FIELD_LABELS.get(field_name)
-        context = validation_error.get("ctx", {})
-        if field and error_type == "string_too_short":
-            label, particle = field
-            return f"{label}{particle} 최소 {context['min_length']}자 이상 입력해야 합니다."
-        if field and error_type == "string_too_long":
-            label, particle = field
-            return f"{label}{particle} 최대 {context['max_length']}자까지 입력할 수 있습니다."
+    field = FIELD_LABELS.get(field_name)
+    context = validation_error.get("ctx", {})
+    
+    if field and error_type == "string_too_short":
+        label, particle = field
+        return f"{label}{particle} 최소 {context['min_length']}자 이상 입력해야 합니다."
+
+    if field and error_type == "string_too_long":
+        label, particle = field
+        return f"{label}{particle} 최대 {context['max_length']}자까지 입력할 수 있습니다."
 
     return validation_error["msg"]
 
