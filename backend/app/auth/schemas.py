@@ -44,22 +44,12 @@ class LoginRequest(BaseModel):
     password: Annotated[
         str,
         Field(
-            max_length=254,
-            description="회원 이메일 주소입니다.",
-            examples=["user@example.com"],
-        ),
-    ]
-    password: str = Field(
-        max_length=128,
-        description="HTTPS로 전송하는 비밀번호입니다.",
-        examples=["password123!"],
-    )
-            min_length=8,
             max_length=128,
             description="HTTPS로 전송하는 비밀번호입니다.",
             examples=["password123!"],
         ),
     ]
+
 
 
 class EmailSendRequest(BaseModel):
