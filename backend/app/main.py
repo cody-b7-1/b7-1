@@ -11,7 +11,7 @@ class HealthResponse(BaseModel):
     """API 서버 상태 응답입니다."""
 
     status: Annotated[
-        Literal["ok"], Field(description="API 사용 가능 상태입니다.", examples=["ok"])
+        Literal["ok"], Field(description="API 서버의 상태입니다.", examples=["ok"])
     ] = "ok"
 
 

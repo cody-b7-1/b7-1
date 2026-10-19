@@ -26,10 +26,10 @@ class Settings(BaseSettings):
 
     app_env: Annotated[Literal["local", "test", "production"], Field()] = "local"
 
-    jwt_secret_key: str = Field(min_length=32)
+    jwt_secret_key: Annotated[str, Field(min_length=32)]
     jwt_algorithm: Literal["HS256"] = "HS256"
-    jwt_access_token_expire_days: int = Field(default=7, gt=0)
-    jwt_refresh_token_expire_days: int = Field(default=14, gt=0)
+    jwt_access_token_expire_days: Annotated[int, Field(gt=0)] = 7
+    jwt_refresh_token_expire_days: Annotated[int, Field(gt=0)] = 14
 
     @property
     def database_url(self) -> URL:
