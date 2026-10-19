@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
-    Boolean,
     Computed,
     Enum as SAEnum,
     Integer,
@@ -14,7 +13,6 @@ from sqlalchemy import (
     TIMESTAMP,
     UUID as SAUUID,
     UniqueConstraint,
-    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -61,7 +59,6 @@ class User(CreatedAtMixin, UpdatedAtMixin, SoftDeleteMixin, Base):
         nullable=False,
         default=Role.USER,
     )
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("1"))
     email_verified_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, nullable=True)
 
     email_verification: Mapped[EmailVerification | None] = relationship(

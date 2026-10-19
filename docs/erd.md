@@ -16,7 +16,6 @@ erDiagram
         varchar(50) nickname "닉네임"
         varchar(255) password_hash "암호화 비밀번호"
         varchar(20) role "권한 구분 (ADMIN, USER)"
-        boolean is_active "계정 활성 상태 (DEFAULT TRUE)"
         timestamp email_verified_at "이메일 인증 완료 일시 (NULL = 미인증)"
         timestamp created_at "가입 일시"
         timestamp updated_at "수정 일시"

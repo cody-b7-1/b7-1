@@ -89,13 +89,10 @@ def issue_dev_access_token(db: Session = Depends(get_db)) -> DevAuthResponse:
             nickname="Development User",
             password_hash="!development-user-no-password!",
             role=Role.USER,
-            is_active=True,
             email_verified_at=datetime.now(UTC).replace(tzinfo=None),
         )
         db.add(user)
     else:
-        # 이미 사용자가 있는 경우 사용(활성화) 
-        user.is_active = True
         if user.email_verified_at is None:
             user.email_verified_at = datetime.now(UTC).replace(tzinfo=None)
 

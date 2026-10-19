@@ -28,7 +28,7 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    """Validate the bearer token and return its active, non-deleted user."""
+    """Validate the bearer token and return its non-deleted user."""
     if credentials is None:
         raise _unauthorized()
 
@@ -43,7 +43,6 @@ def get_current_user(
     user = db.scalar(
         select(User).where(
             User.user_id == user_id,
-            User.is_active.is_(True),
             User.deleted_at.is_(None),
         )
     )

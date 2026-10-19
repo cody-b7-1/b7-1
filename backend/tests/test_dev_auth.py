@@ -51,7 +51,6 @@ class DevAuthTests(unittest.TestCase):
 
         self.assertEqual(db.add_calls, 1)
         self.assertEqual(db.user.email, DEV_USER_EMAIL)
-        self.assertTrue(db.user.is_active)
         self.assertIsNotNone(db.user.email_verified_at)
         self.assertEqual(first.user_id, second.user_id)
         self.assertEqual(first.token_type, "bearer")
