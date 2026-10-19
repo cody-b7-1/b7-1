@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, status
 from pydantic import BaseModel, Field
@@ -10,7 +10,9 @@ from app.core.exceptions import register_exception_handlers
 class HealthResponse(BaseModel):
     """API 서버 상태 응답입니다."""
 
-    status: Literal["ok"] = Field(description="API 사용 가능 상태입니다.", examples=["ok"])
+    status: Annotated[
+        Literal["ok"], Field(description="API 사용 가능 상태입니다.", examples=["ok"])
+    ] = "ok"
 
 
 app = FastAPI(
