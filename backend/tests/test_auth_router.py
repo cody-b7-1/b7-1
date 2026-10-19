@@ -3,17 +3,21 @@ import unittest
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
-from fastapi import HTTPException, Response
+from fastapi import BackgroundTasks, HTTPException, Response
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-from app.auth.router import login
-from app.auth.schemas import LoginRequest
+from app.auth.router import login, send_email_verification_link, sign_up, verify_email_link_token
+from app.auth.schemas import EmailSendRequest, EmailVerifyRequest, LoginRequest, SignUpRequest
 from app.auth.security import (
     create_refresh_token,
     verify_refresh_token,
 )
-from app.auth.service import EmailNotFoundError, PasswordMismatchError
+from app.auth.service import (
+    EmailNotFoundError,
+    InvalidEmailVerificationTokenError,
+    PasswordMismatchError,
+)
 
 
 class AuthRouterTests(unittest.TestCase):
@@ -72,6 +76,57 @@ class AuthRouterTests(unittest.TestCase):
                 raised.exception.detail,
                 "이메일 주소 또는 비밀번호가 일치하지 않습니다.",
             )
+
+    def test_sign_up_creates_and_queues_email_verification_link(self) -> None:
+        request = SignUpRequest(
+            email="user@example.com", nickname="철학탐험가", password="password123!"
+        )
+        user = Mock(email="user@example.com")
+        db = Mock()
+        background_tasks = BackgroundTasks()
+
+        with (
+            patch("app.auth.router.create_user", return_value=user) as create,
+            patch("app.auth.router.create_email_verification", return_value="token") as issue,
+        ):
+            result = sign_up(request, background_tasks, db)
+
+        self.assertIsNone(result)
+        create.assert_called_once_with(db, request)
+        issue.assert_called_once_with(db, user)
+        self.assertEqual(len(background_tasks.tasks), 1)
+        task = background_tasks.tasks[0]
+        self.assertEqual(task.func.__name__, "deliver_email_verification_email")
+        self.assertEqual(task.args, ("user@example.com", "token"))
+
+    def test_email_resend_only_queues_for_unverified_user(self) -> None:
+        request = EmailSendRequest(email="user@example.com")
+        user = Mock(email="user@example.com")
+        db = Mock()
+        db.scalar.return_value = user
+        background_tasks = BackgroundTasks()
+
+        with patch("app.auth.router.create_email_verification", return_value="new-token"):
+            result = send_email_verification_link(request, background_tasks, db)
+
+        self.assertIsNone(result)
+        self.assertEqual(len(background_tasks.tasks), 1)
+        self.assertEqual(background_tasks.tasks[0].args, ("user@example.com", "new-token"))
+
+        db.scalar.return_value = None
+        no_account_tasks = BackgroundTasks()
+        self.assertIsNone(send_email_verification_link(request, no_account_tasks, db))
+        self.assertEqual(no_account_tasks.tasks, [])
+
+    def test_verify_email_token_maps_invalid_token_to_bad_request(self) -> None:
+        with patch(
+            "app.auth.router.verify_email_verification_token",
+            side_effect=InvalidEmailVerificationTokenError,
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                verify_email_link_token(EmailVerifyRequest(token="invalid-token"), Mock())
+
+        self.assertEqual(raised.exception.status_code, 400)
 
 
 if __name__ == "__main__":

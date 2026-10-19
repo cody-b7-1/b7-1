@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     jwt_access_token_expire_days: Annotated[int, Field(gt=0)] = 7
     jwt_refresh_token_expire_days: Annotated[int, Field(gt=0)] = 14
 
+    frontend_url: str = "http://localhost:3000"
+    email_verification_expire_hours: Annotated[int, Field(gt=0)] = 24
+
+    smtp_host: str = ""
+    smtp_port: Annotated[int, Field(gt=0, le=65535)] = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+
     @property
     def database_url(self) -> URL:
         return URL.create(

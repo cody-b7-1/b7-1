@@ -1,16 +1,22 @@
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.email import deliver_email_verification_email
+from app.auth.models.user import User
 from app.auth.schemas import EmailSendRequest, EmailVerifyRequest, LoginRequest, SignUpRequest
 from app.auth.service import (
     EmailAlreadyRegisteredError,
     EmailNotVerifiedError,
     EmailNotFoundError,
     PasswordMismatchError,
+    InvalidEmailVerificationTokenError,
+    create_email_verification,
     create_user,
     login_user,
+    verify_email_verification_token,
 )
 from app.core.config import settings
 from app.db.session import get_db
@@ -42,15 +48,22 @@ router = APIRouter(prefix="/auth", tags=["인증"])
         },
     },
 )
-def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
+def sign_up(
+    request: SignUpRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> None:
     """Create a new user account."""
     try:
-        create_user(db, request)
+        user = create_user(db, request)
     except EmailAlreadyRegisteredError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="이미 등록된 이메일 주소입니다.",
         ) from None
+
+    token = create_email_verification(db, user)
+    background_tasks.add_task(deliver_email_verification_email, user.email, token)
 
     return None
 
@@ -160,10 +173,22 @@ def login(
         },
     },
 )
-def send_email_verification_link(request: EmailSendRequest) -> None:
-    """Declare the email-link sending contract; sending behavior is not implemented yet."""
-
-    # Account lookup, rate limiting, token generation, and email delivery are deferred.
+def send_email_verification_link(
+    request: EmailSendRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> None:
+    """Send a new verification email without revealing account existence."""
+    user = db.scalar(
+        select(User).where(
+            User.email == str(request.email).lower(),
+            User.deleted_at.is_(None),
+            User.email_verified_at.is_(None),
+        )
+    )
+    if user is not None:
+        token = create_email_verification(db, user)
+        background_tasks.add_task(deliver_email_verification_email, user.email, token)
     return None
 
 
@@ -192,10 +217,17 @@ def send_email_verification_link(request: EmailSendRequest) -> None:
         },
     },
 )
-def verify_email_link_token(request: EmailVerifyRequest) -> None:
-    """Declare the email-token verification contract; verification is not implemented yet."""
-
-    # Token lookup, expiration checks, one-time-use handling, and account updates are deferred.
+def verify_email_link_token(
+    request: EmailVerifyRequest, db: Session = Depends(get_db)
+) -> None:
+    """Consume an email verification token and mark the account as verified."""
+    try:
+        verify_email_verification_token(db, request.token)
+    except InvalidEmailVerificationTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="토큰이 올바르지 않거나 만료·사용·무효화되었습니다.",
+        ) from None
     return None
 
 

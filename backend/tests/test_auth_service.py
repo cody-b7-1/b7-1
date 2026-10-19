@@ -1,6 +1,7 @@
 import os
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
@@ -16,11 +17,14 @@ from app.auth.service import (
     EmailAlreadyRegisteredError,
     EmailNotVerifiedError,
     EmailNotFoundError,
+    InvalidEmailVerificationTokenError,
     PasswordMismatchError,
     authenticate_user,
     create_user,
+    create_email_verification,
     issue_refresh_token,
     login_user,
+    verify_email_verification_token,
 )
 
 
@@ -163,6 +167,57 @@ class AuthServiceTests(unittest.TestCase):
 
         with self.assertRaises(PasswordMismatchError):
             authenticate_user(db, request)
+
+    def test_reissue_replaces_the_previous_verification_token(self) -> None:
+        db = Mock()
+        user = self._login_user(verified=False)
+        verification = SimpleNamespace(
+            token_hash=hash_password("old-token"),
+            expires_at=datetime.now(UTC).replace(tzinfo=None),
+        )
+        # First scalar call locks the user, second loads its 1:1 verification row.
+        db.scalar.side_effect = [user, verification]
+
+        token = create_email_verification(db, user)
+
+        self.assertFalse(verify_password("old-token", verification.token_hash))
+        self.assertTrue(verify_password(token, verification.token_hash))
+        self.assertGreater(verification.expires_at, datetime.now(UTC).replace(tzinfo=None))
+        db.commit.assert_called_once()
+
+    def test_valid_verification_token_marks_user_and_consumes_record(self) -> None:
+        db = Mock()
+        token = "valid-token"
+        user = SimpleNamespace(deleted_at=None, email_verified_at=None)
+        verification = SimpleNamespace(
+            token_hash=hash_password(token),
+            user=user,
+            expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
+        )
+        db.scalars.return_value.all.return_value = [verification]
+
+        verify_email_verification_token(db, token)
+
+        self.assertIsNotNone(user.email_verified_at)
+        db.delete.assert_called_once_with(verification)
+        db.commit.assert_called_once()
+
+    def test_expired_or_invalid_verification_token_is_rejected(self) -> None:
+        db = Mock()
+        expired_token = "expired-token"
+        expired_verification = SimpleNamespace(
+            token_hash=hash_password(expired_token),
+            user=SimpleNamespace(deleted_at=None, email_verified_at=None),
+            expires_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=1),
+        )
+        # The query excludes expired records and the service defensively checks
+        # expiry again before consuming a token.
+        db.scalars.return_value.all.return_value = [expired_verification]
+
+        with self.assertRaises(InvalidEmailVerificationTokenError):
+            verify_email_verification_token(db, expired_token)
+
+        db.commit.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()

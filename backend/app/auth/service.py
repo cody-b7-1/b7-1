@@ -1,10 +1,12 @@
 from datetime import UTC, datetime, timedelta
+from secrets import token_urlsafe
 from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.auth.models.email_verification import EmailVerification
 from app.auth.models.refresh_token import RefreshToken
 from app.auth.models.user import Role, User
 from app.auth.schemas import LoginRequest, SignUpRequest
@@ -34,6 +36,10 @@ class PasswordMismatchError(Exception):
 class EmailNotVerifiedError(Exception):
     """Raised when an otherwise usable account has not verified its email."""
 
+
+class InvalidEmailVerificationTokenError(Exception):
+    """Raised when an email verification token is expired, used, or invalid."""
+
 #실제 원인 (사용 중인 계정에 대한 중복 문제)
 def _is_active_email_duplicate(error: IntegrityError) -> bool:
     """Return whether MariaDB reported the active-user email constraint."""
@@ -60,6 +66,64 @@ def create_user(db: Session, request: SignUpRequest) -> User:
         raise
 
     return user
+
+
+def create_email_verification(db: Session, user: User) -> str:
+    """Create or replace a user's one-time email verification token."""
+    token = token_urlsafe(32)
+    # Locking the user row serializes resend requests for one account. This prevents
+    # two concurrent requests from leaving different tokens valid at the same time.
+    db.scalar(select(User).where(User.user_id == user.user_id).with_for_update())
+    verification = db.scalar(
+        select(EmailVerification)
+        .where(EmailVerification.user_id == user.user_id)
+        .with_for_update()
+    )
+    expires_at = (
+        datetime.now(UTC) + timedelta(hours=settings.email_verification_expire_hours)
+    ).replace(tzinfo=None)
+
+    if verification is None:
+        verification = EmailVerification(
+            verification_id=uuid4(),
+            user_id=user.user_id,
+            token_hash=hash_password(token),
+            expires_at=expires_at,
+        )
+        db.add(verification)
+    else:
+        verification.token_hash = hash_password(token)
+        verification.expires_at = expires_at
+
+    db.commit()
+    return token
+
+
+def verify_email_verification_token(db: Session, token: str) -> None:
+    """Consume a valid verification token and mark its user as verified."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+    verifications = db.scalars(
+        select(EmailVerification)
+        .where(EmailVerification.expires_at > now)
+        .with_for_update()
+    ).all()
+
+    for verification in verifications:
+        if verification.expires_at <= now:
+            continue
+        if not verify_password(token, verification.token_hash):
+            continue
+
+        user = verification.user
+        if user.deleted_at is not None or user.email_verified_at is not None:
+            raise InvalidEmailVerificationTokenError
+
+        user.email_verified_at = now
+        db.delete(verification)
+        db.commit()
+        return
+
+    raise InvalidEmailVerificationTokenError
 
 
 def authenticate_user(db: Session, request: LoginRequest) -> User:
