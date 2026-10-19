@@ -102,6 +102,7 @@ def create_email_verification(db: Session, user: User) -> str:
 def verify_email_verification_token(db: Session, token: str) -> None:
     """Consume a valid verification token and mark its user as verified."""
     now = datetime.now(UTC).replace(tzinfo=None)
+
     verifications = db.scalars(
         select(EmailVerification)
         .where(EmailVerification.expires_at > now)
@@ -115,6 +116,7 @@ def verify_email_verification_token(db: Session, token: str) -> None:
             continue
 
         user = verification.user
+        
         if user.deleted_at is not None or user.email_verified_at is not None:
             raise InvalidEmailVerificationTokenError
 

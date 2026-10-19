@@ -179,6 +179,8 @@ def send_email_verification_link(
     db: Session = Depends(get_db),
 ) -> None:
     """Send a new verification email without revealing account existence."""
+
+    #인증되지 않았으며 삭제되지 않은 사용자 찾기 
     user = db.scalar(
         select(User).where(
             User.email == str(request.email).lower(),
@@ -186,7 +188,11 @@ def send_email_verification_link(
             User.email_verified_at.is_(None),
         )
     )
+
+    #찾은 경우 
     if user is not None:
+
+        #인증 토큰 생성 및 전송
         token = create_email_verification(db, user)
         background_tasks.add_task(deliver_email_verification_email, user.email, token)
     return None
@@ -222,6 +228,8 @@ def verify_email_link_token(
 ) -> None:
     """Consume an email verification token and mark the account as verified."""
     try:
+
+        #토큰 검증
         verify_email_verification_token(db, request.token)
     except InvalidEmailVerificationTokenError:
         raise HTTPException(

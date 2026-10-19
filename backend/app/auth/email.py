@@ -22,9 +22,11 @@ def send_email_verification_email(email: str, token: str) -> None:
         f"{settings.frontend_url.rstrip('/')}/verify-email?"
         f"{urlencode({'token': token})}"
     )
+
+    #메시지 생성
     message = EmailMessage()
     message["Subject"] = "Philo 이메일 인증"
-    message["From"] = settings.smtp_from_email or settings.smtp_username
+    message["From"] = settings.smtp_username
     message["To"] = email
     message.set_content(
         "Philo 계정의 이메일 인증을 완료하려면 아래 링크를 열어 주세요.\n\n"
@@ -32,6 +34,7 @@ def send_email_verification_email(email: str, token: str) -> None:
         f"이 링크는 {settings.email_verification_expire_hours}시간 동안 유효합니다."
     )
 
+    #전송
     try:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
             if settings.smtp_use_tls:
