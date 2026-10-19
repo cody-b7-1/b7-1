@@ -32,12 +32,15 @@ class SignUpRequest(BaseModel):
             examples=["철학탐험가"],
         ),
     ]
-    password: str = Field(
-        min_length=8,
-        max_length=128,
-        description="HTTPS로 전송하는 비밀번호입니다.",
-        examples=["password123!"],
-    )
+    password: Annotated[
+        str,
+        Field(
+            min_length=8,
+            max_length=128,
+            description="HTTPS로 전송하는 비밀번호입니다.",
+            examples=["password123!"],
+        ),
+    ]
 
 
 class LoginRequest(BaseModel):
@@ -51,12 +54,15 @@ class LoginRequest(BaseModel):
             examples=["user@example.com"],
         ),
     ]
-    password: str = Field(
-        min_length=8,
-        max_length=128,
-        description="HTTPS로 전송하는 비밀번호입니다.",
-        examples=["password123!"],
-    )
+    password: Annotated[
+        str,
+        Field(
+            min_length=8,
+            max_length=128,
+            description="HTTPS로 전송하는 비밀번호입니다.",
+            examples=["password123!"],
+        ),
+    ]
 
 
 class EmailSendRequest(BaseModel):
@@ -75,10 +81,13 @@ class EmailSendRequest(BaseModel):
 class EmailVerifyRequest(BaseModel):
     """이메일 인증 링크 토큰 검증 요청입니다."""
 
-    token: str = Field(
-        description="이메일 인증 링크에서 받은 토큰입니다.",
-        examples=["opaque-one-time-token"],
-    )
+    token: Annotated[
+        str,
+        Field(
+            description="이메일 인증 링크에서 받은 토큰입니다.",
+            examples=["opaque-one-time-token"],
+        ),
+    ]
 
 
 class LoginResponse(BaseModel):
@@ -86,18 +95,27 @@ class LoginResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    access_token: str = Field(
-        serialization_alias="accessToken",
-        description="JWT 액세스 토큰입니다.",
-        examples=["eyJhbGciOi..."],
-    )
-    token_type: Literal["Bearer"] = Field(
-        serialization_alias="tokenType",
-        description="액세스 토큰의 인증 방식입니다.",
-        examples=["Bearer"],
-    )
-    expires_in: int = Field(
-        serialization_alias="expiresIn",
-        description="액세스 토큰의 유효 기간(초)입니다.",
-        examples=[ACCESS_TOKEN_EXPIRES_IN_SECONDS],
-    )
+    access_token: Annotated[
+        str,
+        Field(
+            serialization_alias="accessToken",
+            description="JWT 액세스 토큰입니다.",
+            examples=["eyJhbGciOi..."],
+        ),
+    ]
+    token_type: Annotated[
+        Literal["Bearer"],
+        Field(
+            serialization_alias="tokenType",
+            description="액세스 토큰의 인증 방식입니다.",
+            examples=["Bearer"],
+        ),
+    ]
+    expires_in: Annotated[
+        int,
+        Field(
+            serialization_alias="expiresIn",
+            description="액세스 토큰의 유효 기간(초)입니다.",
+            examples=[ACCESS_TOKEN_EXPIRES_IN_SECONDS],
+        ),
+    ]
