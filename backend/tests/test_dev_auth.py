@@ -9,6 +9,7 @@ os.environ["APP_ENV"] = "local"
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
 from jwt.exceptions import InvalidTokenError
+from starlette.responses import Response
 
 from app.auth.security import (
     create_access_token,
@@ -43,27 +44,45 @@ class FakeSession:
 
 class DevAuthTests(unittest.TestCase):
 
-    def test_issues_expiring_token_and_reuses_dev_user(self) -> None:
+    def test_sets_login_compatible_token_cookies_and_reuses_dev_user(self) -> None:
         db = FakeSession()
+        first_response = Response(status_code=204)
 
-        first = issue_dev_access_token(db)
-        second = issue_dev_access_token(db)
+        issue_dev_access_token(first_response, db)
+        issue_dev_access_token(Response(status_code=204), db)
 
         self.assertEqual(db.add_calls, 1)
         self.assertEqual(db.user.email, DEV_USER_EMAIL)
         self.assertIsNotNone(db.user.email_verified_at)
-        self.assertEqual(first.user_id, second.user_id)
-        self.assertEqual(first.token_type, "bearer")
-        self.assertEqual(first.model_dump(by_alias=True).keys(), {"userId", "accessToken", "tokenType"})
+        self.assertEqual(first_response.status_code, 204)
+        self.assertEqual(first_response.body, b"")
 
-        payload = verify_access_token(first.access_token)
-        self.assertEqual(payload["sub"], first.user_id)
+        cookies = {
+            header.partition(b"=")[0].decode(): header.decode()
+            for name, header in first_response.raw_headers
+            if name == b"set-cookie"
+        }
+        self.assertEqual(cookies.keys(), {"accessToken", "refreshToken"})
+        self.assertIn("HttpOnly", cookies["accessToken"])
+        self.assertIn("Secure", cookies["accessToken"])
+        self.assertIn("SameSite=lax", cookies["accessToken"])
+        self.assertIn("Path=/api;", cookies["accessToken"])
+        self.assertIn("HttpOnly", cookies["refreshToken"])
+        self.assertIn("Secure", cookies["refreshToken"])
+        self.assertIn("SameSite=lax", cookies["refreshToken"])
+        self.assertIn("Path=/api/auth", cookies["refreshToken"])
+
+        access_token = cookies["accessToken"].split(";", 1)[0].split("=", 1)[1]
+        refresh_token = cookies["refreshToken"].split(";", 1)[0].split("=", 1)[1]
+        payload = verify_access_token(access_token)
+        self.assertEqual(payload["sub"], str(db.user.user_id))
         self.assertEqual(payload["type"], "access")
         self.assertIn("exp", payload)
         expires_at = datetime.fromtimestamp(payload["exp"], UTC)
         self.assertLessEqual(
             abs(expires_at - (datetime.now(UTC) + timedelta(days=7))), timedelta(seconds=2)
         )
+        self.assertEqual(verify_refresh_token(refresh_token)["sub"], str(db.user.user_id))
 
     def test_validates_token_types(self) -> None:
         user_id = uuid4()

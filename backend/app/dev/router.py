@@ -2,49 +2,21 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Depends, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 # Ensure relationship targets are registered before a User instance is mapped.
 from app.db import model_registry as _model_registry
 from app.auth.models.user import Role, User
-from app.auth.security import create_access_token
+from app.auth.security import create_access_token, create_refresh_token
 from app.db.session import get_db
 
 
 DEV_USER_EMAIL = "dev@example.com"
 
 router = APIRouter(prefix="/dev", tags=["개발"])
-
-
-class DevAuthResponse(BaseModel):
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    user_id: Annotated[
-        str,
-        Field(
-            serialization_alias="userId",
-            description="개발용 사용자의 UUID입니다.",
-        ),
-    ]
-    access_token: Annotated[
-        str,
-        Field(
-            serialization_alias="accessToken",
-            description="인증이 필요한 API 호출용 JWT 액세스 토큰입니다.",
-        ),
-    ]
-    token_type: Annotated[
-        str,
-        Field(
-            serialization_alias="tokenType",
-            description="액세스 토큰의 인증 방식입니다.",
-            examples=["bearer"],
-        ),
-    ]
 
 
 class DevAuthErrorResponse(BaseModel):
@@ -60,22 +32,38 @@ class DevAuthErrorResponse(BaseModel):
 
 @router.post(
     "/auth",
-    response_model=DevAuthResponse,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    response_class=Response,
     summary="개발용 JWT 발급",
     description=(
-        "로컬 개발용 사용자를 생성하거나 재사용하고 액세스 토큰을 반환합니다. 이 "
-        "엔드포인트는 APP_ENV가 local일 때만 등록됩니다."
+        "로컬 개발용 사용자를 생성하거나 재사용하고, 로그인 API와 동일하게 HTTP 전용"
+        "(HttpOnly) accessToken 및 refreshToken 쿠키를 설정합니다. 응답 본문은 반환하지 "
+        "않습니다. 이 엔드포인트는 APP_ENV가 local일 때만 등록됩니다."
     ),
     responses={
-        status.HTTP_200_OK: {"description": "개발용 JWT 발급에 성공했습니다."},
+        status.HTTP_204_NO_CONTENT: {
+            "description": "개발용 JWT 발급에 성공했습니다. accessToken 및 refreshToken 쿠키를 설정합니다.",
+            "headers": {
+                "Set-Cookie": {
+                    "description": (
+                        "accessToken 쿠키는 HTTP 전용(HttpOnly), 보안(Secure), SameSite=Lax, "
+                        "Path=/api 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
+                        "속성을 가집니다. 각 쿠키는 별도의 Set-Cookie 헤더로 반환합니다."
+                    ),
+                    "schema": {"type": "string"},
+                }
+            },
+        },
         status.HTTP_500_INTERNAL_SERVER_ERROR: {
             "model": DevAuthErrorResponse,
             "description": "개발용 사용자 또는 JWT를 생성하지 못했습니다.",
         }
     },
 )
-def issue_dev_access_token(db: Session = Depends(get_db)) -> DevAuthResponse:
+def issue_dev_access_token(
+    response: Response, db: Session = Depends(get_db)
+) -> None:
    
     #scalar : SQLAlchemy Session 객체가 가진 메서드 
     user = db.scalar(
@@ -98,8 +86,19 @@ def issue_dev_access_token(db: Session = Depends(get_db)) -> DevAuthResponse:
 
     db.commit()
 
-    return DevAuthResponse(
-        user_id=str(user.user_id),
-        access_token=create_access_token(user.user_id),
-        token_type="bearer",
+    response.set_cookie(
+        key="accessToken",
+        value=create_access_token(user.user_id),
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/api",
+    )
+    response.set_cookie(
+        key="refreshToken",
+        value=create_refresh_token(user.user_id),
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/api/auth",
     )
