@@ -37,10 +37,7 @@ if settings.is_local:
     status_code=status.HTTP_200_OK,
     summary="상태 확인",
     responses={
-        status.HTTP_200_OK: {"description": "API 상태가 정상입니다."},
-        status.HTTP_500_INTERNAL_SERVER_ERROR: {
-            "description": "API가 상태 확인 요청을 처리하지 못했습니다."
-        }
+        status.HTTP_200_OK: {"description": "인스턴스가 실행 중입니다."},
     },
 )
 def health() -> HealthResponse:
