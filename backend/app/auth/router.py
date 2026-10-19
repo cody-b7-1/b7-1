@@ -67,7 +67,7 @@ def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
                 "Set-Cookie": {
                     "description": (
                         "accessToken 쿠키는 HTTP 전용(HttpOnly), 보안(Secure), SameSite=Lax, "
-                        "Path=/ 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
+                        "Path=/api 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
                         "속성을 가집니다. 각 쿠키는 "
                         "별도의 Set-Cookie 헤더로 반환합니다."
                     ),
@@ -184,7 +184,7 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
                 "Set-Cookie": {
                     "description": (
                         "accessToken 쿠키는 HTTP 전용(HttpOnly), 보안(Secure), SameSite=Lax, "
-                        "Path=/ 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
+                        "Path=/api 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
                         "속성을 가집니다. 각 쿠키는 "
                         "별도의 Set-Cookie 헤더로 반환합니다."
                     ),
@@ -236,7 +236,7 @@ def refresh_access_token() -> None:
             "headers": {
                 "Set-Cookie": {
                     "description": (
-                        "accessToken(Path=/) 및 refreshToken(Path=/api/auth) HTTP 전용 "
+                        "accessToken(Path=/api) 및 refreshToken(Path=/api/auth) HTTP 전용 "
                         "쿠키를 각각 별도의 Set-Cookie 헤더로 만료 처리합니다."
                     ),
                     "schema": {"type": "string"},
