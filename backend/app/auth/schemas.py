@@ -10,19 +10,21 @@ ACCESS_TOKEN_EXPIRES_IN_SECONDS = int(
     timedelta(days=settings.jwt_access_token_expire_days).total_seconds()
 )
 
+EmailAddress = Annotated[
+    EmailStr,
+    Field(
+        max_length=254,
+        json_schema_extra={"format": "email"},
+        description="회원 이메일 주소입니다.",
+        examples=["user@example.com"],
+    ),
+]
+
 
 class SignUpRequest(BaseModel):
     """회원가입 요청입니다."""
 
-    email: Annotated[
-        EmailStr,
-        Field(
-            max_length=254,
-            json_schema_extra={"format": "email"},
-            description="회원 이메일 주소입니다.",
-            examples=["user@example.com"],
-        ),
-    ]
+    email: EmailAddress
     nickname: Annotated[
         str,
         Field(
@@ -46,14 +48,7 @@ class SignUpRequest(BaseModel):
 class LoginRequest(BaseModel):
     """이메일과 비밀번호로 로그인하는 요청입니다."""
 
-    email: Annotated[
-        EmailStr,
-        Field(
-            max_length=254,
-            description="회원 이메일 주소입니다.",
-            examples=["user@example.com"],
-        ),
-    ]
+    email: EmailAddress
     password: Annotated[
         str,
         Field(
@@ -68,14 +63,7 @@ class LoginRequest(BaseModel):
 class EmailSendRequest(BaseModel):
     """이메일 인증 링크 발송 요청입니다."""
 
-    email: Annotated[
-        EmailStr,
-        Field(
-            max_length=254,
-            description="회원 이메일 주소입니다.",
-            examples=["user@example.com"],
-        ),
-    ]
+    email: EmailAddress
 
 
 class EmailVerifyRequest(BaseModel):
