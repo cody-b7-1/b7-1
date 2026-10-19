@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, status
 from pydantic import BaseModel, Field
@@ -10,7 +10,9 @@ from app.core.exceptions import register_exception_handlers
 class HealthResponse(BaseModel):
     """API 서버 상태 응답입니다."""
 
-    status: Literal["ok"] = Field(description="API 사용 가능 상태입니다.", examples=["ok"])
+    status: Annotated[
+        Literal["ok"], Field(description="API 서버의 상태입니다.", examples=["ok"])
+    ] = "ok"
 
 
 app = FastAPI(
@@ -37,10 +39,7 @@ if settings.is_local:
     status_code=status.HTTP_200_OK,
     summary="상태 확인",
     responses={
-        status.HTTP_200_OK: {"description": "API 상태가 정상입니다."},
-        status.HTTP_500_INTERNAL_SERVER_ERROR: {
-            "description": "API가 상태 확인 요청을 처리하지 못했습니다."
-        }
+        status.HTTP_200_OK: {"description": "인스턴스가 실행 중입니다."},
     },
 )
 def health() -> HealthResponse:

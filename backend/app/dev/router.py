@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, status
@@ -22,27 +23,39 @@ class DevAuthResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    user_id: str = Field(
-        serialization_alias="userId",
-        description="개발용 사용자의 UUID입니다.",
-    )
-    access_token: str = Field(
-        serialization_alias="accessToken",
-        description="인증이 필요한 API 호출용 JWT 액세스 토큰입니다.",
-    )
-    token_type: str = Field(
-        serialization_alias="tokenType",
-        description="액세스 토큰의 인증 방식입니다.",
-        examples=["bearer"],
-    )
+    user_id: Annotated[
+        str,
+        Field(
+            serialization_alias="userId",
+            description="개발용 사용자의 UUID입니다.",
+        ),
+    ]
+    access_token: Annotated[
+        str,
+        Field(
+            serialization_alias="accessToken",
+            description="인증이 필요한 API 호출용 JWT 액세스 토큰입니다.",
+        ),
+    ]
+    token_type: Annotated[
+        str,
+        Field(
+            serialization_alias="tokenType",
+            description="액세스 토큰의 인증 방식입니다.",
+            examples=["bearer"],
+        ),
+    ]
 
 
 class DevAuthErrorResponse(BaseModel):
 
-    detail: str = Field(
-        description="개발용 JWT를 발급하지 못한 이유입니다.",
-        examples=["액세스 토큰을 발급하려면 JWT_SECRET_KEY 설정이 필요합니다."],
-    )
+    detail: Annotated[
+        str,
+        Field(
+            description="개발용 JWT를 발급하지 못한 이유입니다.",
+            examples=["액세스 토큰을 발급하려면 JWT_SECRET_KEY 설정이 필요합니다."],
+        ),
+    ]
 
 
 @router.post(
@@ -76,13 +89,10 @@ def issue_dev_access_token(db: Session = Depends(get_db)) -> DevAuthResponse:
             nickname="Development User",
             password_hash="!development-user-no-password!",
             role=Role.USER,
-            is_active=True,
             email_verified_at=datetime.now(UTC).replace(tzinfo=None),
         )
         db.add(user)
     else:
-        # 이미 사용자가 있는 경우 사용(활성화) 
-        user.is_active = True
         if user.email_verified_at is None:
             user.email_verified_at = datetime.now(UTC).replace(tzinfo=None)
 

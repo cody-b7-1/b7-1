@@ -49,7 +49,6 @@ def create_user(db: Session, request: SignUpRequest) -> User:
         nickname=request.nickname,
         password_hash=hash_password(request.password),
         role=Role.USER,
-        is_active=True,
     )
     db.add(user)
 
