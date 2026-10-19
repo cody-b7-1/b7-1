@@ -28,10 +28,6 @@ class EmailNotFoundError(Exception):
 class PasswordMismatchError(Exception):
     """Raised when the supplied password does not match the account."""
 
-class InactiveAccountError(Exception): #휴면
-    """Raised when the account has been deactivated."""
-
-
 class EmailNotVerifiedError(Exception):
     """Raised when an otherwise usable account has not verified its email."""
 
@@ -64,7 +60,7 @@ def create_user(db: Session, request: SignUpRequest) -> User:
 
 
 def authenticate_user(db: Session, request: LoginRequest) -> User:
-    """Authenticate an active, verified user from an email/password request."""
+    """Authenticate a non-deleted, verified user from an email/password request."""
     email = str(request.email).lower()
     user = db.scalar(
         select(User).where(User.email == email, User.deleted_at.is_(None)) #삭제되지 않은 user 조회 
@@ -75,9 +71,6 @@ def authenticate_user(db: Session, request: LoginRequest) -> User:
 
     if not verify_password(request.password, user.password_hash):
         raise PasswordMismatchError
-
-    if not user.is_active:
-        raise InactiveAccountError
 
     if user.email_verified_at is None:
         raise EmailNotVerifiedError

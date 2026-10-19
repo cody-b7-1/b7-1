@@ -1,6 +1,5 @@
 import os
 import unittest
-from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
@@ -8,35 +7,21 @@ from fastapi import HTTPException, Response
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-from app.auth.models.user import Role, User
 from app.auth.router import login
 from app.auth.schemas import LoginRequest
 from app.auth.security import (
     create_refresh_token,
-    hash_password,
-    verify_access_token,
     verify_refresh_token,
 )
 from app.auth.service import EmailNotFoundError, PasswordMismatchError
 
 
 class AuthRouterTests(unittest.TestCase):
-    def _active_verified_user(self) -> User:
-        return User(
-            user_id=uuid4(),
-            email="user@example.com",
-            nickname="철학탐험가",
-            password_hash=hash_password("password123!"),
-            role=Role.USER,
-            is_active=True,
-            email_verified_at=datetime.now(UTC).replace(tzinfo=None),
-        )
-
-    def test_login_returns_tokens_and_sets_refresh_token_cookie(self) -> None:
-        user = self._active_verified_user()
+    def test_login_sets_access_and_refresh_token_cookies(self) -> None:
+        user_id = uuid4()
         response = Response()
         db = Mock()
-        refresh_token = create_refresh_token(user.user_id)
+        refresh_token = create_refresh_token(user_id)
 
         with (
             patch(
@@ -50,18 +35,22 @@ class AuthRouterTests(unittest.TestCase):
                 db,
             )
 
-        self.assertEqual(result.token_type, "Bearer")
-        self.assertGreater(result.expires_in, 0)
-        self.assertEqual(result.access_token, "access-token")
+        self.assertIsNone(result)
 
-        cookie = response.headers["set-cookie"]
-        cookie_refresh_token = cookie.split(";", 1)[0].split("=", 1)[1]
+        cookies = response.headers.getlist("set-cookie")
+        self.assertEqual(len(cookies), 2)
+        access_cookie = next(cookie for cookie in cookies if cookie.startswith("accessToken="))
+        refresh_cookie = next(cookie for cookie in cookies if cookie.startswith("refreshToken="))
+        self.assertEqual(access_cookie.split(";", 1)[0], "accessToken=access-token")
+        cookie_refresh_token = refresh_cookie.split(";", 1)[0].split("=", 1)[1]
         refresh_payload = verify_refresh_token(cookie_refresh_token)
-        self.assertEqual(refresh_payload["sub"], str(user.user_id))
-        self.assertIn("HttpOnly", cookie)
-        self.assertIn("Secure", cookie)
-        self.assertIn("SameSite=lax", cookie)
-        self.assertIn("Path=/api/auth", cookie)
+        self.assertEqual(refresh_payload["sub"], str(user_id))
+        for cookie in (access_cookie, refresh_cookie):
+            self.assertIn("HttpOnly", cookie)
+            self.assertIn("Secure", cookie)
+            self.assertIn("SameSite=lax", cookie)
+        self.assertIn("Path=/api", access_cookie)
+        self.assertIn("Path=/api/auth", refresh_cookie)
 
         login_service.assert_called_once_with(
             db, LoginRequest(email="user@example.com", password="password123!")

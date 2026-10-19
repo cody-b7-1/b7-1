@@ -3,18 +3,11 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.schemas import (
-    EmailSendRequest,
-    EmailVerifyRequest,
-    ACCESS_TOKEN_EXPIRES_IN_SECONDS,
-    LoginRequest,
-    SignUpRequest,
-)
+from app.auth.schemas import EmailSendRequest, EmailVerifyRequest, LoginRequest, SignUpRequest
 from app.auth.service import (
     EmailAlreadyRegisteredError,
     EmailNotVerifiedError,
     EmailNotFoundError,
-    InactiveAccountError,
     PasswordMismatchError,
     create_user,
     login_user,
@@ -79,7 +72,7 @@ def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
                 "Set-Cookie": {
                     "description": (
                         "accessToken 쿠키는 HTTP 전용(HttpOnly), 보안(Secure), SameSite=Lax, "
-                        "Path=/ 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
+                        "Path=/api 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
                         "속성을 가집니다. 각 쿠키는 "
                         "별도의 Set-Cookie 헤더로 반환합니다."
                     ),
@@ -91,7 +84,7 @@ def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
             "description": "이메일 주소 또는 비밀번호가 일치하지 않습니다.",
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "이메일 미인증 계정 또는 사용할 수 없는 계정입니다.",
+            "description": "이메일 인증이 완료되지 않은 계정입니다.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "요청 값이 올바르지 않거나 누락되었습니다.",
@@ -102,8 +95,8 @@ def login(
     request: LoginRequest,
     response: Response,
     db: Session = Depends(get_db),
-) -> LoginResponse:
-    """Authenticate a user and return an access token with a refresh-token cookie."""
+) -> None:
+    """Authenticate a user and set access and refresh token cookies."""
     try:
         access_token, refresh_token = login_user(db, request)
     except (EmailNotFoundError, PasswordMismatchError):
@@ -111,20 +104,26 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="이메일 주소 또는 비밀번호가 일치하지 않습니다.", #어떤 내용이 틀렸는지 명확히 알려주지 않음 
         ) from None
-    except InactiveAccountError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="사용할 수 없는 계정입니다.",
-        ) from None
     except EmailNotVerifiedError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="이메일 인증이 완료되지 않은 계정입니다.",
         ) from None
 
-    #브라우저 저장 기간
+    access_token_max_age = int(
+        timedelta(days=settings.jwt_access_token_expire_days).total_seconds()
+    )
     refresh_token_max_age = int(
         timedelta(days=settings.jwt_refresh_token_expire_days).total_seconds()
+    )
+    response.set_cookie(
+        key="accessToken",
+        value=access_token,
+        max_age=access_token_max_age,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/api",
     )
     response.set_cookie(
         key="refreshToken",
@@ -136,11 +135,7 @@ def login(
         path="/api/auth",
     )
 
-    return LoginResponse(
-        access_token=access_token,
-        token_type="Bearer",
-        expires_in=ACCESS_TOKEN_EXPIRES_IN_SECONDS,
-    )
+    return None
 
 
 @router.post(
@@ -233,7 +228,7 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
                 "Set-Cookie": {
                     "description": (
                         "accessToken 쿠키는 HTTP 전용(HttpOnly), 보안(Secure), SameSite=Lax, "
-                        "Path=/ 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
+                        "Path=/api 속성을, refreshToken 쿠키는 같은 속성과 Path=/api/auth "
                         "속성을 가집니다. 각 쿠키는 "
                         "별도의 Set-Cookie 헤더로 반환합니다."
                     ),
@@ -285,7 +280,7 @@ def refresh_access_token() -> None:
             "headers": {
                 "Set-Cookie": {
                     "description": (
-                        "accessToken(Path=/) 및 refreshToken(Path=/api/auth) HTTP 전용 "
+                        "accessToken(Path=/api) 및 refreshToken(Path=/api/auth) HTTP 전용 "
                         "쿠키를 각각 별도의 Set-Cookie 헤더로 만료 처리합니다."
                     ),
                     "schema": {"type": "string"},

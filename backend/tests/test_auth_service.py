@@ -16,7 +16,6 @@ from app.auth.service import (
     EmailAlreadyRegisteredError,
     EmailNotVerifiedError,
     EmailNotFoundError,
-    InactiveAccountError,
     PasswordMismatchError,
     authenticate_user,
     create_user,
@@ -52,14 +51,13 @@ class FailingSession(FakeSession):
 
 
 class AuthServiceTests(unittest.TestCase):
-    def _login_user(self, *, is_active: bool = True, verified: bool = True) -> User:
+    def _login_user(self, *, verified: bool = True) -> User:
         return User(
             user_id=uuid4(),
             email="user@example.com",
             nickname="철학탐험가",
             password_hash=hash_password("password123!"),
             role=Role.USER,
-            is_active=is_active,
             email_verified_at=datetime.now(UTC).replace(tzinfo=None) if verified else None,
         )
 
@@ -165,15 +163,6 @@ class AuthServiceTests(unittest.TestCase):
 
         with self.assertRaises(PasswordMismatchError):
             authenticate_user(db, request)
-
-    def test_authenticate_user_rejects_deactivated_account(self) -> None:
-        db = Mock()
-        db.scalar.return_value = self._login_user(is_active=False, verified=False)
-        request = LoginRequest(email="user@example.com", password="password123!")
-
-        with self.assertRaises(InactiveAccountError):
-            authenticate_user(db, request)
-
 
 if __name__ == "__main__":
     unittest.main()
