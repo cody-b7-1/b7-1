@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 from app.auth.router import router as auth_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
+from app.db import model_registry as _model_registry  # noqa: F401
+
 
 class HealthResponse(BaseModel):
     """API 서버 상태 응답입니다."""

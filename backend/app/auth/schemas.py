@@ -68,4 +68,3 @@ class EmailVerifyRequest(BaseModel):
             examples=["opaque-one-time-token"],
         ),
     ]
-

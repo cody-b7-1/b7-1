@@ -11,6 +11,7 @@ from app.auth.models.user import User
 from app.auth.security import verify_access_token
 from app.db.session import get_db
 
+
 def _unauthorized() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -26,14 +27,14 @@ def get_current_user(
     if access_token is None:
         raise _unauthorized()
 
-    #토큰 검증 
+    # 토큰 검증
     try:
         payload = verify_access_token(access_token)
         user_id = UUID(payload["sub"])
     except (InvalidTokenError, KeyError, ValueError, TypeError):
         raise _unauthorized() from None
 
-    #사용자 조회
+    # 사용자 조회
     user = db.scalar(
         select(User).where(
             User.user_id == user_id,

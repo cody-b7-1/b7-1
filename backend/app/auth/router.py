@@ -1,28 +1,43 @@
 from datetime import timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Cookie,
+    Depends,
+    HTTPException,
+    Response,
+    status,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.email import deliver_email_verification_email
 from app.auth.models.user import User
-from app.auth.schemas import EmailSendRequest, EmailVerifyRequest, LoginRequest, SignUpRequest
+from app.auth.schemas import (
+    EmailSendRequest,
+    EmailVerifyRequest,
+    LoginRequest,
+    SignUpRequest,
+)
 from app.auth.service import (
     EmailAlreadyRegisteredError,
-    EmailNotVerifiedError,
     EmailNotFoundError,
-    PasswordMismatchError,
+    EmailNotVerifiedError,
     InvalidEmailVerificationTokenError,
+    PasswordMismatchError,
     create_email_verification,
     create_user,
     login_user,
+    revoke_refresh_token,
     verify_email_verification_token,
 )
 from app.core.config import settings
 from app.db.session import get_db
 
-
 router = APIRouter(prefix="/auth", tags=["인증"])
+
+
 @router.post(
     "/sign-up",
     status_code=status.HTTP_201_CREATED,
@@ -64,8 +79,6 @@ def sign_up(
 
     token = create_email_verification(db, user)
     background_tasks.add_task(deliver_email_verification_email, user.email, token)
-
-    return None
 
 
 @router.post(
@@ -115,7 +128,7 @@ def login(
     except (EmailNotFoundError, PasswordMismatchError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="이메일 주소 또는 비밀번호가 일치하지 않습니다.", #어떤 내용이 틀렸는지 명확히 알려주지 않음 
+            detail="이메일 주소 또는 비밀번호가 일치하지 않습니다.",  # 어떤 내용이 틀렸는지 명확히 알려주지 않음
         ) from None
     except EmailNotVerifiedError:
         raise HTTPException(
@@ -148,8 +161,6 @@ def login(
         path="/api/auth",
     )
 
-    return None
-
 
 @router.post(
     "/email/send",
@@ -180,7 +191,7 @@ def send_email_verification_link(
 ) -> None:
     """Send a new verification email without revealing account existence."""
 
-    #인증되지 않았으며 삭제되지 않은 사용자 찾기 
+    # 인증되지 않았으며 삭제되지 않은 사용자 찾기
     user = db.scalar(
         select(User).where(
             User.email == str(request.email).lower(),
@@ -189,13 +200,11 @@ def send_email_verification_link(
         )
     )
 
-    #찾은 경우 
+    # 찾은 경우
     if user is not None:
-
-        #인증 토큰 생성 및 전송
+        # 인증 토큰 생성 및 전송
         token = create_email_verification(db, user)
         background_tasks.add_task(deliver_email_verification_email, user.email, token)
-    return None
 
 
 @router.post(
@@ -228,15 +237,13 @@ def verify_email_link_token(
 ) -> None:
     """Consume an email verification token and mark the account as verified."""
     try:
-
-        #토큰 검증
+        # 토큰 검증
         verify_email_verification_token(db, request.token)
     except InvalidEmailVerificationTokenError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="토큰이 올바르지 않거나 만료·사용·무효화되었습니다.",
         ) from None
-    return None
 
 
 @router.post(
@@ -289,7 +296,7 @@ def refresh_access_token() -> None:
 
     # Cookie validation, token rotation, JWT issuance, and CSRF/Origin checks are deferred.
     # On success, accessToken and refreshToken will be issued as cookies.
-    return None
+    return
 
 
 @router.post(
@@ -301,19 +308,8 @@ def refresh_access_token() -> None:
     description=(
         "accessToken 및 refreshToken 쿠키를 모두 만료 처리합니다. 쿠키가 없거나 만료되어도 "
         "204를 반환하며, 서로 다른 origin인 경우 프런트엔드 요청에는 credentials: 'include'가 필요합니다. "
-        "refreshToken의 서버 측 무효화는 추후 실제 구현에서 처리합니다."
+        "refreshToken이 있으면 서버에서도 무효화합니다."
     ),
-    openapi_extra={
-        "parameters": [
-            {
-                "name": "refreshToken",
-                "in": "cookie",
-                "required": False,
-                "description": "HTTP 전용(HttpOnly) 리프레시 토큰 쿠키입니다.",
-                "schema": {"type": "string"},
-            }
-        ]
-    },
     responses={
         status.HTTP_204_NO_CONTENT: {
             "description": "이미 로그아웃된 경우를 포함해 로그아웃에 성공했습니다.",
@@ -335,8 +331,19 @@ def refresh_access_token() -> None:
         },
     },
 )
-def logout() -> None:
-    """Declare the logout contract; logout behavior is not implemented yet."""
+def logout(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None, alias="refreshToken"),
+    db: Session = Depends(get_db),
+) -> None:
+    """Revoke the refresh token when present and expire authentication cookies."""
 
-    # Refresh-token invalidation, cookie expiration, and CSRF/Origin checks are deferred.
-    return None
+    # refresh 토큰 삭제
+    if refresh_token is not None:
+        revoke_refresh_token(db, refresh_token)
+
+    # 쿠키 삭제
+    response.delete_cookie(key="accessToken", path="/api", secure=True, httponly=True)
+    response.delete_cookie(
+        key="refreshToken", path="/api/auth", secure=True, httponly=True
+    )
