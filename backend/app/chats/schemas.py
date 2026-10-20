@@ -95,8 +95,8 @@ class MessageItem(CamelResponseModel):
         description="메시지 ID",
         examples=["00000000-0000-4000-8000-000000000010"],
     )
-    sender_role: Literal["USER", "PHILOSOPHER"] = Field(
-        description="메시지 발신자 역할 (USER | PHILOSOPHER)",
+    sender_role: Literal["USER", "PHILOSOPHER", "SYSTEM"] = Field(
+        description="메시지 발신자 역할 (USER | PHILOSOPHER | SYSTEM)",
         examples=["PHILOSOPHER"],
     )
     philosopher_id: int | None = Field(
