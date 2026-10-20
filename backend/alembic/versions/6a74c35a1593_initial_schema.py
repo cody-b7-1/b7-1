@@ -37,7 +37,6 @@ def upgrade() -> None:
     sa.Column('nickname', sa.String(length=50), nullable=False),
     sa.Column('password_hash', sa.String(length=255), nullable=False),
     sa.Column('role', sa.String(length=20), nullable=False),
-    sa.Column('is_active', sa.Boolean(), server_default=sa.text('1'), nullable=False),
     sa.Column('email_verified_at', sa.TIMESTAMP(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(), server_default=sa.text('utc_timestamp()'), nullable=False),
     sa.Column('updated_at', sa.TIMESTAMP(), server_default=sa.text('utc_timestamp()'), nullable=False),
