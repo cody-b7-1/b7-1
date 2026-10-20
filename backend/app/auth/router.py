@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import get_current_user
+from app.auth.models.user import User
 from app.auth.schemas import (
+    CurrentUserResponse,
     EmailSendRequest,
     EmailVerifyRequest,
     LoginRequest,
     SignUpRequest,
+    SignUpResponse,
 )
 from app.auth.service import EmailAlreadyRegisteredError, create_user
 from app.db.session import get_db
@@ -13,16 +17,40 @@ from app.db.session import get_db
 router = APIRouter(prefix="/auth", tags=["인증"])
 
 
+@router.get(
+    "/me",
+    response_model=CurrentUserResponse,
+    summary="내 정보 조회",
+    description="액세스 토큰으로 인증된 사용자의 이메일 주소와 닉네임을 반환합니다.",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "현재 로그인한 사용자 정보를 반환합니다.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "액세스 토큰이 누락되었거나 유효하지 않거나 만료되었습니다.",
+        },
+    },
+)
+def get_me(current_user: User = Depends(get_current_user)) -> CurrentUserResponse:
+    """Return the authenticated user's public profile."""
+    return CurrentUserResponse(
+        email=current_user.email,
+        nickname=current_user.nickname,
+    )
+
+
 @router.post(
     "/sign-up",
     status_code=status.HTTP_201_CREATED,
-    response_model=None,
-    response_class=Response,
+    response_model=SignUpResponse,
     summary="회원가입",
-    description="이메일 주소와 비밀번호로 계정을 생성합니다.",
+    description=(
+        "이메일 주소와 비밀번호로 계정을 생성하고 생성된 사용자의 이메일 주소와 "
+        "닉네임을 반환합니다."
+    ),
     responses={
         status.HTTP_201_CREATED: {
-            "description": "회원가입에 성공했습니다.",
+            "description": "회원가입에 성공하여 생성된 사용자 정보를 반환합니다.",
         },
         status.HTTP_409_CONFLICT: {
             "description": "삭제되지 않은 계정에 이미 등록된 이메일 주소입니다.",
@@ -38,15 +66,20 @@ router = APIRouter(prefix="/auth", tags=["인증"])
         },
     },
 )
-def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
+def sign_up(
+    request: SignUpRequest,
+    db: Session = Depends(get_db),
+) -> SignUpResponse:
     """Create a new user account."""
     try:
-        create_user(db, request)
+        user = create_user(db, request)
     except EmailAlreadyRegisteredError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="이미 등록된 이메일 주소입니다.",
         ) from None
+
+    return SignUpResponse(email=user.email, nickname=user.nickname)
 
 
 @router.post(
