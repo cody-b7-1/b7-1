@@ -7,12 +7,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-# Ensure relationship targets are registered before a User instance is mapped.
-from app.db import model_registry as _model_registry
 from app.auth.models.user import Role, User
 from app.auth.security import create_access_token, create_refresh_token
-from app.db.session import get_db
 
+# Ensure relationship targets are registered before a User instance is mapped.
+from app.db.session import get_db
 
 DEV_USER_EMAIL = "dev@example.com"
 
@@ -27,6 +26,35 @@ class DevAuthErrorResponse(BaseModel):
             examples=["액세스 토큰을 발급하려면 JWT_SECRET_KEY 설정이 필요합니다."],
         ),
     ]
+
+
+# class DevCurrentUserResponse(BaseModel):
+#     """The authenticated local-development user."""
+
+#     user_id: UUID
+#     email: str
+
+
+# @router.get(
+#     "/auth/current-user",
+#     response_model=DevCurrentUserResponse,
+#     status_code=status.HTTP_200_OK,
+#     summary="개발용 현재 사용자 확인",
+#     description="accessToken 쿠키로 인증된 현재 개발 사용자를 반환합니다.",
+#     responses={
+#         status.HTTP_401_UNAUTHORIZED: {
+#             "description": "accessToken 쿠키가 없거나 유효하지 않습니다.",
+#         }
+#     },
+# )
+# def get_dev_current_user(
+#     current_user: User = Depends(get_current_user),
+# ) -> DevCurrentUserResponse:
+#     """Expose cookie-authentication behavior only in local development."""
+#     return DevCurrentUserResponse(
+#         user_id=current_user.user_id,
+#         email=current_user.email,
+#     )
 
 
 @router.post(

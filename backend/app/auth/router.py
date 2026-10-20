@@ -14,7 +14,6 @@ from app.auth.schemas import (
 from app.auth.service import EmailAlreadyRegisteredError, create_user
 from app.db.session import get_db
 
-
 router = APIRouter(prefix="/auth", tags=["인증"])
 
 
@@ -124,7 +123,7 @@ def login(request: LoginRequest) -> None:
 
     # Credential verification and JWT issuance are deferred.
     # On success, accessToken and refreshToken will be issued as cookies.
-    return None
+    return
 
 
 @router.post(
@@ -153,7 +152,7 @@ def send_email_verification_link(request: EmailSendRequest) -> None:
     """Declare the email-link sending contract; sending behavior is not implemented yet."""
 
     # Account lookup, rate limiting, token generation, and email delivery are deferred.
-    return None
+    return
 
 
 @router.post(
@@ -185,7 +184,7 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
     """Declare the email-token verification contract; verification is not implemented yet."""
 
     # Token lookup, expiration checks, one-time-use handling, and account updates are deferred.
-    return None
+    return
 
 
 @router.post(
@@ -238,7 +237,7 @@ def refresh_access_token() -> None:
 
     # Cookie validation, token rotation, JWT issuance, and CSRF/Origin checks are deferred.
     # On success, accessToken and refreshToken will be issued as cookies.
-    return None
+    return
 
 
 @router.post(
@@ -288,4 +287,4 @@ def logout() -> None:
     """Declare the logout contract; logout behavior is not implemented yet."""
 
     # Refresh-token invalidation, cookie expiration, and CSRF/Origin checks are deferred.
-    return None
+    return
