@@ -4,10 +4,9 @@ from uuid import uuid4
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-from fastapi import HTTPException
-
 from app.auth.dependencies import get_current_user
 from app.auth.security import create_access_token, create_refresh_token
+from fastapi import HTTPException
 
 
 class FakeSession:
@@ -31,9 +30,9 @@ class CurrentUserDependencyTests(unittest.TestCase):
 
     def test_rejects_missing_or_invalid_token(self) -> None:
         for credentials in (
-            None, #인증정보 x
-            "not-a-token", #jwt 형식이 유효 x
-            create_refresh_token(uuid4()), #refresh token을 access token에 전달
+            None,  # 인증정보 x
+            "not-a-token",  # jwt 형식이 유효 x
+            create_refresh_token(uuid4()),  # refresh token을 access token에 전달
         ):
             with self.assertRaises(HTTPException) as error:
                 get_current_user(credentials, FakeSession())

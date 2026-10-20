@@ -45,7 +45,9 @@ def create_token(
     if token_id is not None:
         payload["jti"] = str(token_id)
 
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return jwt.encode(
+        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+    )
 
 
 def create_access_token(user_id: UUID, expires_delta: timedelta | None = None) -> str:

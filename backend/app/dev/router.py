@@ -20,7 +20,6 @@ router = APIRouter(prefix="/dev", tags=["개발"])
 
 
 class DevAuthErrorResponse(BaseModel):
-
     detail: Annotated[
         str,
         Field(
@@ -58,18 +57,16 @@ class DevAuthErrorResponse(BaseModel):
         status.HTTP_500_INTERNAL_SERVER_ERROR: {
             "model": DevAuthErrorResponse,
             "description": "개발용 사용자 또는 JWT를 생성하지 못했습니다.",
-        }
+        },
     },
 )
-def issue_dev_access_token(
-    response: Response, db: Session = Depends(get_db)
-) -> None:
-   
-    #scalar : SQLAlchemy Session 객체가 가진 메서드 
+def issue_dev_access_token(response: Response, db: Session = Depends(get_db)) -> None:
+
+    # scalar : SQLAlchemy Session 객체가 가진 메서드
     user = db.scalar(
         select(User).where(User.email == DEV_USER_EMAIL, User.deleted_at.is_(None))
     )
-    #user 생성
+    # user 생성
     if user is None:
         user = User(
             user_id=uuid4(),

@@ -7,6 +7,7 @@ from app.auth.router import router as auth_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 
+
 class HealthResponse(BaseModel):
     """API 서버 상태 응답입니다."""
 

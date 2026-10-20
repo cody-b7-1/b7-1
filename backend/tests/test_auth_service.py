@@ -14,8 +14,8 @@ from app.auth.schemas import LoginRequest, SignUpRequest
 from app.auth.security import hash_password, verify_password, verify_refresh_token
 from app.auth.service import (
     EmailAlreadyRegisteredError,
-    EmailNotVerifiedError,
     EmailNotFoundError,
+    EmailNotVerifiedError,
     PasswordMismatchError,
     authenticate_user,
     create_user,
@@ -58,7 +58,9 @@ class AuthServiceTests(unittest.TestCase):
             nickname="철학탐험가",
             password_hash=hash_password("password123!"),
             role=Role.USER,
-            email_verified_at=datetime.now(UTC).replace(tzinfo=None) if verified else None,
+            email_verified_at=datetime.now(UTC).replace(tzinfo=None)
+            if verified
+            else None,
         )
 
     def test_create_user_hashes_password_and_persists_user(self) -> None:
@@ -78,9 +80,15 @@ class AuthServiceTests(unittest.TestCase):
         self.assertLessEqual(len(user.password_hash), 255)
         self.assertTrue(verify_password(request.password, user.password_hash))
 
-    def test_create_user_maps_only_active_email_constraint_to_duplicate_error(self) -> None:
+    def test_create_user_maps_only_active_email_constraint_to_duplicate_error(
+        self,
+    ) -> None:
         db = FailingSession(
-            IntegrityError(None, None, Exception("Duplicate entry for key 'uq_users_email_active_marker'"))
+            IntegrityError(
+                None,
+                None,
+                Exception("Duplicate entry for key 'uq_users_email_active_marker'"),
+            )
         )
         request = SignUpRequest(
             email="user@example.com",
@@ -108,7 +116,9 @@ class AuthServiceTests(unittest.TestCase):
         self.assertIs(raised.exception, error)
         self.assertEqual(db.rollback_calls, 1)
 
-    def test_issue_refresh_token_adds_hashed_token_record_with_matching_jti(self) -> None:
+    def test_issue_refresh_token_adds_hashed_token_record_with_matching_jti(
+        self,
+    ) -> None:
         db = Mock()
         user = self._login_user()
 
@@ -129,9 +139,15 @@ class AuthServiceTests(unittest.TestCase):
         request = LoginRequest(email="user@example.com", password="password123!")
 
         with (
-            patch("app.auth.service.authenticate_user", return_value=user) as authenticate,
-            patch("app.auth.service.issue_refresh_token", return_value="refresh-token") as issue,
-            patch("app.auth.service.create_access_token", return_value="access-token") as access,
+            patch(
+                "app.auth.service.authenticate_user", return_value=user
+            ) as authenticate,
+            patch(
+                "app.auth.service.issue_refresh_token", return_value="refresh-token"
+            ) as issue,
+            patch(
+                "app.auth.service.create_access_token", return_value="access-token"
+            ) as access,
         ):
             tokens = login_user(db, request)
 
@@ -163,6 +179,7 @@ class AuthServiceTests(unittest.TestCase):
 
         with self.assertRaises(PasswordMismatchError):
             authenticate_user(db, request)
+
 
 if __name__ == "__main__":
     unittest.main()
