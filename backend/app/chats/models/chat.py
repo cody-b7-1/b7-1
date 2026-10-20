@@ -32,5 +32,7 @@ class Chat(CreatedAtMixin, UpdatedAtMixin, SoftDeleteMixin, Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
 
     user: Mapped[User] = relationship(back_populates="chats")
-    current_philosopher: Mapped[Philosopher] = relationship(back_populates="current_chats")
+    current_philosopher: Mapped[Philosopher] = relationship(
+        back_populates="current_chats"
+    )
     messages: Mapped[list[Message]] = relationship(back_populates="chat")

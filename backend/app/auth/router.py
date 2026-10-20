@@ -12,6 +12,8 @@ from app.db.session import get_db
 
 
 router = APIRouter(prefix="/auth", tags=["인증"])
+
+
 @router.post(
     "/sign-up",
     status_code=status.HTTP_201_CREATED,

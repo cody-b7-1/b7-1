@@ -54,9 +54,15 @@ class AuthServiceTests(unittest.TestCase):
         self.assertLessEqual(len(user.password_hash), 255)
         self.assertTrue(verify_password(request.password, user.password_hash))
 
-    def test_create_user_maps_only_active_email_constraint_to_duplicate_error(self) -> None:
+    def test_create_user_maps_only_active_email_constraint_to_duplicate_error(
+        self,
+    ) -> None:
         db = FailingSession(
-            IntegrityError(None, None, Exception("Duplicate entry for key 'uq_users_email_active_marker'"))
+            IntegrityError(
+                None,
+                None,
+                Exception("Duplicate entry for key 'uq_users_email_active_marker'"),
+            )
         )
         request = SignUpRequest(
             email="user@example.com",
@@ -64,7 +70,9 @@ class AuthServiceTests(unittest.TestCase):
             password="password123!",
         )
 
-        with self.assertRaisesRegex(EmailAlreadyRegisteredError, "이미 등록된 이메일 주소입니다."):
+        with self.assertRaisesRegex(
+            EmailAlreadyRegisteredError, "이미 등록된 이메일 주소입니다."
+        ):
             create_user(db, request)
 
         self.assertEqual(db.rollback_calls, 1)
