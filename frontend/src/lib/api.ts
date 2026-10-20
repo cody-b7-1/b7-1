@@ -24,9 +24,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // ---- auth ----
-export type SignUpBody = { email: string; password: string; nickname: string };
+export type SignUpBody = {
+  email: string;
+  password: string;
+  nickname: string;
+};
 
-export type User = { email: string; nickname: string };
+export type User = {
+  email: string;
+  nickname: string;
+};
 
 export const signUp = (body: SignUpBody) =>
   request<User>("/auth/sign-up", {
@@ -42,4 +49,4 @@ export const login = (email: string, password: string) =>
 
 export const logout = () => request<null>("/auth/logout", { method: "POST" });
 
-export const me = () => request<User>("/auth/me");
+export const getMe = () => request<User>("/auth/me");
