@@ -67,7 +67,8 @@ class ChatService:
             is_success=True,
         )
 
-        # self.db.add_all([user_message, assistant_message])\n        # self.db.commit()
+        # self.db.add_all([user_message, assistant_message])
+        # self.db.commit()
         _ = (user_message, assistant_message)
 
         # 5. 응답 스키마 반환
