@@ -3,11 +3,13 @@
 import logging
 import smtplib
 from email.message import EmailMessage
+from html import escape
 from urllib.parse import urlencode
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
 
 class EmailDeliveryError(Exception):
     """Raised when an email verification message cannot be delivered."""
@@ -15,7 +17,11 @@ class EmailDeliveryError(Exception):
 
 def send_email_verification_email(email: str, token: str) -> None:
     """Send the frontend verification URL to an account email address."""
-    if not settings.smtp_host or not settings.smtp_username or not settings.smtp_password:
+    if (
+        not settings.smtp_host
+        or not settings.smtp_username
+        or not settings.smtp_password
+    ):
         raise EmailDeliveryError("SMTP 설정이 완료되지 않았습니다.")
 
     verification_url = (
@@ -23,10 +29,10 @@ def send_email_verification_email(email: str, token: str) -> None:
         f"{urlencode({'token': token})}"
     )
 
-    #메시지 생성
+    # 메시지 생성
     message = EmailMessage()
     message["Subject"] = "Philo 이메일 인증"
-    message["From"] = settings.smtp_username
+    message["From"] = settings.smtp_from_email or settings.smtp_username
     message["To"] = email
     message.set_content(
         "Philo 계정의 이메일 인증을 완료하려면 아래 링크를 열어 주세요.\n\n"
@@ -34,7 +40,25 @@ def send_email_verification_email(email: str, token: str) -> None:
         f"이 링크는 {settings.email_verification_expire_hours}시간 동안 유효합니다."
     )
 
-    #전송
+    safe_url = escape(verification_url, quote=True)
+    message.add_alternative(
+        f"""
+        <html>
+          <body>
+            <p>Philo 계정의 이메일 인증을 완료하려면 아래 링크를 열어 주세요.</p>
+            <br>
+            <p>
+              <a href="{safe_url}">{safe_url}</a>
+            </p>
+            <br>
+            <p>이 링크는 {settings.email_verification_expire_hours}시간 동안 유효합니다.</p>
+          </body>
+        </html>
+        """,
+        subtype="html",
+    )
+
+    # 전송
     try:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
             if settings.smtp_use_tls:

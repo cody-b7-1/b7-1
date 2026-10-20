@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-from app.auth.email import EmailDeliveryError, deliver_email_verification_email, send_email_verification_email
+from app.auth.email import (
+    EmailDeliveryError,
+    deliver_email_verification_email,
+    send_email_verification_email,
+)
 from app.core.config import settings
 
 
@@ -40,8 +44,21 @@ class EmailDeliveryTests(unittest.TestCase):
         smtp.login.assert_called_once_with("sender@example.com", "password")
         message = smtp.send_message.call_args.args[0]
         self.assertEqual(message["To"], "user@example.com")
+        self.assertTrue(message.is_multipart())
+        text_part, html_part = message.iter_parts()
         self.assertIn(
-            "https://app.example.com/verify-email?token=a+token", message.get_content()
+            "https://app.example.com/verify-email?token=a+token",
+            text_part.get_content(),
+        )
+        self.assertEqual(text_part.get_content_type(), "text/plain")
+        self.assertEqual(html_part.get_content_type(), "text/html")
+        self.assertIn(
+            'href="https://app.example.com/verify-email?token=a+token"',
+            html_part.get_content(),
+        )
+        self.assertIn(
+            ">https://app.example.com/verify-email?token=a+token</a>",
+            html_part.get_content(),
         )
 
     def test_background_delivery_logs_smtp_failure_without_token(self) -> None:

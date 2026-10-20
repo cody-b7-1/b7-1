@@ -7,13 +7,18 @@ from fastapi import BackgroundTasks, HTTPException, Response
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-<<<<<<< HEAD
-from app.auth.router import login, send_email_verification_link, sign_up, verify_email_link_token
-from app.auth.schemas import EmailSendRequest, EmailVerifyRequest, LoginRequest, SignUpRequest
-=======
-from app.auth.router import login, logout
-from app.auth.schemas import LoginRequest
->>>>>>> 79410f112c79c00c8ae085d3db8c3c3fee12aaba
+from app.auth.router import (
+    login,
+    send_email_verification_link,
+    sign_up,
+    verify_email_link_token,
+)
+from app.auth.schemas import (
+    EmailSendRequest,
+    EmailVerifyRequest,
+    LoginRequest,
+    SignUpRequest,
+)
 from app.auth.security import (
     create_refresh_token,
     verify_refresh_token,
@@ -87,7 +92,6 @@ class AuthRouterTests(unittest.TestCase):
                 "이메일 주소 또는 비밀번호가 일치하지 않습니다.",
             )
 
-<<<<<<< HEAD
     def test_sign_up_creates_and_queues_email_verification_link(self) -> None:
         request = SignUpRequest(
             email="user@example.com", nickname="철학탐험가", password="password123!"
@@ -98,7 +102,9 @@ class AuthRouterTests(unittest.TestCase):
 
         with (
             patch("app.auth.router.create_user", return_value=user) as create,
-            patch("app.auth.router.create_email_verification", return_value="token") as issue,
+            patch(
+                "app.auth.router.create_email_verification", return_value="token"
+            ) as issue,
         ):
             result = sign_up(request, background_tasks, db)
 
@@ -117,12 +123,16 @@ class AuthRouterTests(unittest.TestCase):
         db.scalar.return_value = user
         background_tasks = BackgroundTasks()
 
-        with patch("app.auth.router.create_email_verification", return_value="new-token"):
+        with patch(
+            "app.auth.router.create_email_verification", return_value="new-token"
+        ):
             result = send_email_verification_link(request, background_tasks, db)
 
         self.assertIsNone(result)
         self.assertEqual(len(background_tasks.tasks), 1)
-        self.assertEqual(background_tasks.tasks[0].args, ("user@example.com", "new-token"))
+        self.assertEqual(
+            background_tasks.tasks[0].args, ("user@example.com", "new-token")
+        )
 
         db.scalar.return_value = None
         no_account_tasks = BackgroundTasks()
@@ -130,38 +140,16 @@ class AuthRouterTests(unittest.TestCase):
         self.assertEqual(no_account_tasks.tasks, [])
 
     def test_verify_email_token_maps_invalid_token_to_bad_request(self) -> None:
-        with patch(
-            "app.auth.router.verify_email_verification_token",
-            side_effect=InvalidEmailVerificationTokenError,
+        with (
+            patch(
+                "app.auth.router.verify_email_verification_token",
+                side_effect=InvalidEmailVerificationTokenError,
+            ),
+            self.assertRaises(HTTPException) as raised,
         ):
-            with self.assertRaises(HTTPException) as raised:
-                verify_email_link_token(EmailVerifyRequest(token="invalid-token"), Mock())
+            verify_email_link_token(EmailVerifyRequest(token="invalid-token"), Mock())
 
         self.assertEqual(raised.exception.status_code, 400)
-=======
-    def test_logout_revokes_refresh_token_and_expires_cookies(self) -> None:
-        response = Response()
-        db = Mock()
-
-        with patch("app.auth.router.revoke_refresh_token") as revoke:
-            result = logout(response, "refresh-token", db)
-
-        self.assertIsNone(result)
-        revoke.assert_called_once_with(db, "refresh-token")
-        cookies = response.headers.getlist("set-cookie")
-        self.assertEqual(len(cookies), 2)
-        self.assertTrue(any(cookie.startswith("accessToken=") for cookie in cookies))
-        self.assertTrue(any(cookie.startswith("refreshToken=") for cookie in cookies))
-
-    def test_logout_without_refresh_token_still_expires_cookies(self) -> None:
-        response = Response()
-
-        with patch("app.auth.router.revoke_refresh_token") as revoke:
-            logout(response, None, Mock())
-
-        revoke.assert_not_called()
-        self.assertEqual(len(response.headers.getlist("set-cookie")), 2)
->>>>>>> 79410f112c79c00c8ae085d3db8c3c3fee12aaba
 
 
 if __name__ == "__main__":

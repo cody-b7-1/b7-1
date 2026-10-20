@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     smtp_port: Annotated[int, Field(gt=0, le=65535)] = 587
     smtp_username: str = ""
     smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_use_tls: bool = True
 
     @property
     def database_url(self) -> URL:

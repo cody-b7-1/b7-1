@@ -22,22 +22,16 @@ from app.auth.security import (
 from app.auth.service import (
     EmailAlreadyRegisteredError,
     EmailNotFoundError,
-<<<<<<< HEAD
-    InvalidEmailVerificationTokenError,
-=======
     EmailNotVerifiedError,
->>>>>>> 79410f112c79c00c8ae085d3db8c3c3fee12aaba
+    InvalidEmailVerificationTokenError,
     PasswordMismatchError,
     authenticate_user,
-    create_user,
     create_email_verification,
+    create_user,
     issue_refresh_token,
     login_user,
-<<<<<<< HEAD
-    verify_email_verification_token,
-=======
     revoke_refresh_token,
->>>>>>> 79410f112c79c00c8ae085d3db8c3c3fee12aaba
+    verify_email_verification_token,
 )
 
 
@@ -225,7 +219,6 @@ class AuthServiceTests(unittest.TestCase):
         with self.assertRaises(PasswordMismatchError):
             authenticate_user(db, request)
 
-<<<<<<< HEAD
     def test_reissue_replaces_the_previous_verification_token(self) -> None:
         db = Mock()
         user = self._login_user(verified=False)
@@ -240,7 +233,9 @@ class AuthServiceTests(unittest.TestCase):
 
         self.assertFalse(verify_password("old-token", verification.token_hash))
         self.assertTrue(verify_password(token, verification.token_hash))
-        self.assertGreater(verification.expires_at, datetime.now(UTC).replace(tzinfo=None))
+        self.assertGreater(
+            verification.expires_at, datetime.now(UTC).replace(tzinfo=None)
+        )
         db.commit.assert_called_once()
 
     def test_valid_verification_token_marks_user_and_consumes_record(self) -> None:
@@ -276,8 +271,7 @@ class AuthServiceTests(unittest.TestCase):
             verify_email_verification_token(db, expired_token)
 
         db.commit.assert_not_called()
-=======
->>>>>>> 79410f112c79c00c8ae085d3db8c3c3fee12aaba
+
 
 if __name__ == "__main__":
     unittest.main()
