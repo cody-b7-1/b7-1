@@ -1,5 +1,7 @@
 from pathlib import Path
+from typing import Annotated, Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -22,6 +24,13 @@ class Settings(BaseSettings):
     db_password: str
     db_name: str
 
+    app_env: Annotated[Literal["local", "test", "production"], Field()] = "local"
+
+    jwt_secret_key: Annotated[str, Field(min_length=32)]
+    jwt_algorithm: Literal["HS256"] = "HS256"
+    jwt_access_token_expire_days: Annotated[int, Field(gt=0)] = 7
+    jwt_refresh_token_expire_days: Annotated[int, Field(gt=0)] = 14
+
     @property
     def database_url(self) -> URL:
         return URL.create(
@@ -32,6 +41,10 @@ class Settings(BaseSettings):
             port=self.db_port,
             database=self.db_name,
         )
+
+    @property
+    def is_local(self) -> bool:
+        return self.app_env == "local"
 
 
 settings = Settings()

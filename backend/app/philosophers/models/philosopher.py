@@ -20,6 +20,7 @@ class Philosopher(CreatedAtMixin, UpdatedAtMixin, Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     introduction: Mapped[str] = mapped_column(Text, nullable=False)
+    profile_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("1"))
 
     current_chats: Mapped[list[Chat]] = relationship(back_populates="current_philosopher")
