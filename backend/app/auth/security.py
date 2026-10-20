@@ -1,5 +1,7 @@
 """Shared primitives for issuing authentication tokens."""
 
+import hashlib
+import hmac
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -9,7 +11,6 @@ from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 
 from app.core.config import settings
-
 
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
@@ -26,6 +27,16 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     """평문 비밀번호가 저장된 Argon2id 해시와 일치하는지 검증합니다."""
     return password_hasher.verify(password, password_hash)
+
+
+def hash_refresh_token(token: str) -> str:
+    """리프레시 토큰을 DB 저장용 SHA-256 해시로 변환합니다."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def verify_refresh_token_hash(token: str, token_hash: str) -> bool:
+    """리프레시 토큰이 저장된 SHA-256 해시와 일치하는지 검증합니다."""
+    return hmac.compare_digest(hash_refresh_token(token), token_hash)
 
 
 def create_token(

@@ -11,7 +11,13 @@ os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 from app.auth.models.refresh_token import RefreshToken
 from app.auth.models.user import Role, User
 from app.auth.schemas import LoginRequest, SignUpRequest
-from app.auth.security import hash_password, verify_password, verify_refresh_token
+from app.auth.security import (
+    hash_password,
+    hash_refresh_token,
+    verify_password,
+    verify_refresh_token,
+    verify_refresh_token_hash,
+)
 from app.auth.service import (
     EmailAlreadyRegisteredError,
     EmailNotFoundError,
@@ -21,6 +27,7 @@ from app.auth.service import (
     create_user,
     issue_refresh_token,
     login_user,
+    revoke_refresh_token,
 )
 
 
@@ -131,7 +138,35 @@ class AuthServiceTests(unittest.TestCase):
         self.assertIsInstance(saved_token, RefreshToken)
         self.assertEqual(str(saved_token.token_id), payload["jti"])
         self.assertEqual(saved_token.user_id, user.user_id)
-        self.assertTrue(verify_password(refresh_token, saved_token.token_hash))
+        self.assertEqual(saved_token.token_hash, hash_refresh_token(refresh_token))
+        self.assertEqual(len(saved_token.token_hash), 64)
+        self.assertTrue(
+            verify_refresh_token_hash(refresh_token, saved_token.token_hash)
+        )
+
+    def test_revoke_refresh_token_marks_matching_sha256_record_revoked(self) -> None:
+        refresh_token = "refresh-token"
+        stored_token = RefreshToken(
+            token_id=uuid4(),
+            user_id=uuid4(),
+            token_hash=hash_refresh_token(refresh_token),
+            expires_at=datetime.now(UTC).replace(tzinfo=None),
+        )
+        db = Mock()
+        db.scalar.return_value = stored_token
+
+        revoke_refresh_token(db, refresh_token)
+
+        self.assertTrue(stored_token.is_revoked)
+        db.commit.assert_called_once_with()
+
+    def test_revoke_refresh_token_ignores_missing_record(self) -> None:
+        db = Mock()
+        db.scalar.return_value = None
+
+        revoke_refresh_token(db, "unknown-refresh-token")
+
+        db.commit.assert_not_called()
 
     def test_login_user_combines_authentication_and_token_issuance(self) -> None:
         db = Mock()

@@ -12,6 +12,7 @@ from app.auth.security import (
     create_access_token,
     create_refresh_token,
     hash_password,
+    hash_refresh_token,
     verify_password,
 )
 from app.core.config import settings
@@ -92,11 +93,13 @@ def issue_refresh_token(db: Session, user: User) -> str:
     """Issue a refresh JWT with a jti and persist its hashed record."""
     token_id = uuid4()
     refresh_token = create_refresh_token(user.user_id, token_id=token_id)
+
+    # db 저장 시 refresh token hashing
     db.add(
         RefreshToken(
             token_id=token_id,
             user_id=user.user_id,
-            token_hash=hash_password(refresh_token),
+            token_hash=hash_refresh_token(refresh_token),
             expires_at=(
                 datetime.now(UTC)
                 + timedelta(days=settings.jwt_refresh_token_expire_days)
@@ -105,6 +108,26 @@ def issue_refresh_token(db: Session, user: User) -> str:
     )
     db.commit()
     return refresh_token
+
+
+def revoke_refresh_token(db: Session, refresh_token: str) -> None:
+    """Revoke the persisted refresh token."""
+
+    # Refresh Token 해싱
+    token_hash = hash_refresh_token(refresh_token)
+
+    # DB에서 해당 토큰 조회
+    stored_token = db.scalar(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+    )
+
+    # 토큰이 없거나 이미 폐기된 경우
+    if stored_token is None or stored_token.is_revoked:
+        return
+
+    # 해당 Refresh Token만 폐기
+    stored_token.is_revoked = True
+    db.commit()
 
 
 def login_user(db: Session, request: LoginRequest) -> tuple[str, str]:

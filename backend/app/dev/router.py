@@ -7,12 +7,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-# Ensure relationship targets are registered before a User instance is mapped.
-from app.db import model_registry as _model_registry
 from app.auth.models.user import Role, User
 from app.auth.security import create_access_token, create_refresh_token
-from app.db.session import get_db
 
+# Ensure relationship targets are registered before a User instance is mapped.
+from app.db.session import get_db
 
 DEV_USER_EMAIL = "dev@example.com"
 

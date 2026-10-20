@@ -1,20 +1,25 @@
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.schemas import EmailSendRequest, EmailVerifyRequest, LoginRequest, SignUpRequest
+from app.auth.schemas import (
+    EmailSendRequest,
+    EmailVerifyRequest,
+    LoginRequest,
+    SignUpRequest,
+)
 from app.auth.service import (
     EmailAlreadyRegisteredError,
-    EmailNotVerifiedError,
     EmailNotFoundError,
+    EmailNotVerifiedError,
     PasswordMismatchError,
     create_user,
     login_user,
+    revoke_refresh_token,
 )
 from app.core.config import settings
 from app.db.session import get_db
-
 
 router = APIRouter(prefix="/auth", tags=["인증"])
 
@@ -53,8 +58,6 @@ def sign_up(request: SignUpRequest, db: Session = Depends(get_db)) -> None:
             status_code=status.HTTP_409_CONFLICT,
             detail="이미 등록된 이메일 주소입니다.",
         ) from None
-
-    return None
 
 
 @router.post(
@@ -104,7 +107,7 @@ def login(
     except (EmailNotFoundError, PasswordMismatchError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="이메일 주소 또는 비밀번호가 일치하지 않습니다.", #어떤 내용이 틀렸는지 명확히 알려주지 않음 
+            detail="이메일 주소 또는 비밀번호가 일치하지 않습니다.",  # 어떤 내용이 틀렸는지 명확히 알려주지 않음
         ) from None
     except EmailNotVerifiedError:
         raise HTTPException(
@@ -137,8 +140,6 @@ def login(
         path="/api/auth",
     )
 
-    return None
-
 
 @router.post(
     "/email/send",
@@ -166,7 +167,7 @@ def send_email_verification_link(request: EmailSendRequest) -> None:
     """Declare the email-link sending contract; sending behavior is not implemented yet."""
 
     # Account lookup, rate limiting, token generation, and email delivery are deferred.
-    return None
+    return
 
 
 @router.post(
@@ -198,7 +199,7 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
     """Declare the email-token verification contract; verification is not implemented yet."""
 
     # Token lookup, expiration checks, one-time-use handling, and account updates are deferred.
-    return None
+    return
 
 
 @router.post(
@@ -251,7 +252,7 @@ def refresh_access_token() -> None:
 
     # Cookie validation, token rotation, JWT issuance, and CSRF/Origin checks are deferred.
     # On success, accessToken and refreshToken will be issued as cookies.
-    return None
+    return
 
 
 @router.post(
@@ -263,7 +264,7 @@ def refresh_access_token() -> None:
     description=(
         "accessToken 및 refreshToken 쿠키를 모두 만료 처리합니다. 쿠키가 없거나 만료되어도 "
         "204를 반환하며, 서로 다른 origin인 경우 프런트엔드 요청에는 credentials: 'include'가 필요합니다. "
-        "refreshToken의 서버 측 무효화는 추후 실제 구현에서 처리합니다."
+        "refreshToken이 있으면 서버에서도 무효화합니다."
     ),
     openapi_extra={
         "parameters": [
@@ -297,8 +298,19 @@ def refresh_access_token() -> None:
         },
     },
 )
-def logout() -> None:
-    """Declare the logout contract; logout behavior is not implemented yet."""
+def logout(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None, alias="refreshToken"),
+    db: Session = Depends(get_db),
+) -> None:
+    """Revoke the refresh token when present and expire authentication cookies."""
 
-    # Refresh-token invalidation, cookie expiration, and CSRF/Origin checks are deferred.
-    return None
+    # refresh 토큰 삭제
+    if refresh_token is not None:
+        revoke_refresh_token(db, refresh_token)
+
+    # 쿠키 삭제
+    response.delete_cookie(key="accessToken", path="/api", secure=True, httponly=True)
+    response.delete_cookie(
+        key="refreshToken", path="/api/auth", secure=True, httponly=True
+    )
