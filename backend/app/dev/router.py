@@ -8,7 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.models.user import Role, User
-from app.auth.security import create_access_token, create_refresh_token
+from app.auth.security import create_access_token
+from app.auth.service import issue_refresh_token
 
 # Ensure relationship targets are registered before a User instance is mapped.
 from app.db.session import get_db
@@ -82,6 +83,8 @@ def issue_dev_access_token(response: Response, db: Session = Depends(get_db)) ->
 
     db.commit()
 
+    refresh_token = issue_refresh_token(db, user)
+
     response.set_cookie(
         key="accessToken",
         value=create_access_token(user.user_id),
@@ -92,7 +95,7 @@ def issue_dev_access_token(response: Response, db: Session = Depends(get_db)) ->
     )
     response.set_cookie(
         key="refreshToken",
-        value=create_refresh_token(user.user_id),
+        value=refresh_token,
         httponly=True,
         secure=True,
         samesite="lax",
