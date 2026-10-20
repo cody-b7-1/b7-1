@@ -4,9 +4,9 @@ from uuid import uuid4
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-from fastapi import HTTPException
 from app.auth.dependencies import get_current_user
 from app.auth.security import create_access_token, create_refresh_token
+from fastapi import HTTPException
 
 
 class FakeSession:

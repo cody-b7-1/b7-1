@@ -1,19 +1,17 @@
 from datetime import UTC, datetime
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-# Ensure relationship targets are registered before a User instance is mapped.
-from app.db import model_registry as _model_registry
-from app.auth.dependencies import get_current_user
 from app.auth.models.user import Role, User
 from app.auth.security import create_access_token, create_refresh_token
-from app.db.session import get_db
 
+# Ensure relationship targets are registered before a User instance is mapped.
+from app.db.session import get_db
 
 DEV_USER_EMAIL = "dev@example.com"
 
@@ -21,7 +19,6 @@ router = APIRouter(prefix="/dev", tags=["개발"])
 
 
 class DevAuthErrorResponse(BaseModel):
-
     detail: Annotated[
         str,
         Field(
@@ -88,18 +85,16 @@ class DevAuthErrorResponse(BaseModel):
         status.HTTP_500_INTERNAL_SERVER_ERROR: {
             "model": DevAuthErrorResponse,
             "description": "개발용 사용자 또는 JWT를 생성하지 못했습니다.",
-        }
+        },
     },
 )
-def issue_dev_access_token(
-    response: Response, db: Session = Depends(get_db)
-) -> None:
-   
-    #scalar : SQLAlchemy Session 객체가 가진 메서드 
+def issue_dev_access_token(response: Response, db: Session = Depends(get_db)) -> None:
+
+    # scalar : SQLAlchemy Session 객체가 가진 메서드
     user = db.scalar(
         select(User).where(User.email == DEV_USER_EMAIL, User.deleted_at.is_(None))
     )
-    #user 생성
+    # user 생성
     if user is None:
         user = User(
             user_id=uuid4(),

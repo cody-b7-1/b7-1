@@ -33,7 +33,9 @@ def create_user(db: Session, request: SignUpRequest) -> User:
     except IntegrityError as error:
         db.rollback()
         if _is_active_email_duplicate(error):
-            raise EmailAlreadyRegisteredError("이미 등록된 이메일 주소입니다.") from error
+            raise EmailAlreadyRegisteredError(
+                "이미 등록된 이메일 주소입니다."
+            ) from error
         raise
 
     return user

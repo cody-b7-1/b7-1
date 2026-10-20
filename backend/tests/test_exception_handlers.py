@@ -25,7 +25,9 @@ class ExceptionHandlerTests(unittest.TestCase):
         )
 
     def test_returns_safe_internal_server_error_response(self) -> None:
-        response = asyncio.run(unhandled_exception_handler(None, RuntimeError("database failure")))
+        response = asyncio.run(
+            unhandled_exception_handler(None, RuntimeError("database failure"))
+        )
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(
@@ -90,9 +92,24 @@ class ExceptionHandlerTests(unittest.TestCase):
 
     def test_returns_korean_message_for_string_length_limits(self) -> None:
         cases = [
-            ("password", "string_too_short", {"min_length": 8}, "비밀번호는 최소 8자 이상 입력해야 합니다."),
-            ("password", "string_too_long", {"max_length": 128}, "비밀번호는 최대 128자까지 입력할 수 있습니다."),
-            ("nickname", "string_too_long", {"max_length": 50}, "닉네임은 최대 50자까지 입력할 수 있습니다."),
+            (
+                "password",
+                "string_too_short",
+                {"min_length": 8},
+                "비밀번호는 최소 8자 이상 입력해야 합니다.",
+            ),
+            (
+                "password",
+                "string_too_long",
+                {"max_length": 128},
+                "비밀번호는 최대 128자까지 입력할 수 있습니다.",
+            ),
+            (
+                "nickname",
+                "string_too_long",
+                {"max_length": 50},
+                "닉네임은 최대 50자까지 입력할 수 있습니다.",
+            ),
         ]
 
         for field, error_type, context, message in cases:
@@ -126,7 +143,9 @@ class ExceptionHandlerTests(unittest.TestCase):
             )
 
         response = asyncio.run(
-            request_validation_error_handler(None, RequestValidationError(raised.exception.errors()))
+            request_validation_error_handler(
+                None, RequestValidationError(raised.exception.errors())
+            )
         )
         body = json.loads(response.body)
 
