@@ -8,12 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.models.user import Role, User
-<<<<<<< HEAD
 from app.auth.security import create_access_token
 from app.auth.service import issue_refresh_token
-=======
-from app.auth.security import create_access_token, create_refresh_token
->>>>>>> 70b1dfe417f141bdf25f21ceaf1748bd38ba45a4
 
 # Ensure relationship targets are registered before a User instance is mapped.
 from app.db.session import get_db

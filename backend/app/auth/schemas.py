@@ -66,8 +66,6 @@ class LoginRequest(BaseModel):
     ]
 
 
-<<<<<<< HEAD
-=======
 class CurrentUserResponse(BaseModel):
     """현재 로그인한 사용자 정보입니다."""
 
@@ -82,7 +80,6 @@ class CurrentUserResponse(BaseModel):
         ),
     ]
 
->>>>>>> 70b1dfe417f141bdf25f21ceaf1748bd38ba45a4
 
 class EmailSendRequest(BaseModel):
     """이메일 인증 링크 발송 요청입니다."""
