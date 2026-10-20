@@ -8,6 +8,7 @@ from app.chats.models.chat import Chat
 from app.chats.models.message import Message
 from app.chats.schemas import (
     ChatListItem,
+    ChatListResponse,
     StartChatRequest,
     StartChatResponse,
 )
@@ -79,7 +80,12 @@ class ChatService:
             philosopher_id=philosopher.philosopher_id,
         )
 
-    def list_chats(self, user_id: UUID4 | None = None) -> list[ChatListItem]:
+    def list_chats(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        user_id: UUID4 | None = None,
+    ) -> ChatListResponse:
         target_user_id = user_id or UUID(
             "00000000-0000-4000-8000-000000000001"
         )  # TODO: 인증(Auth) 연동 후 실제 로그인 유저의 user_id 사용
@@ -89,16 +95,24 @@ class ChatService:
             .where(Chat.user_id == target_user_id, Chat.deleted_at.is_(None))
             .order_by(Chat.updated_at.desc())
         )
-        chats = self.db.scalars(stmt).all()
+        all_chats = self.db.scalars(stmt).all()
+        total = len(all_chats)
+        paged_chats = all_chats[offset : offset + limit]
 
-        return [
-            ChatListItem(
-                chat_id=chat.chat_id,
-                chat_title=chat.title,
-                current_philosopher_id=chat.current_philosopher_id,
-            )
-            for chat in chats
-        ]
+        return ChatListResponse(
+            items=[
+                ChatListItem(
+                    chat_id=chat.chat_id,
+                    chat_title=chat.title,
+                    current_philosopher_id=chat.current_philosopher_id,
+                )
+                for chat in paged_chats
+            ],
+            total=total,
+            limit=limit,
+            offset=offset,
+            has_more=offset + len(paged_chats) < total,
+        )
 
     def delete_chat(self, chat_id: UUID4) -> None:
         pass

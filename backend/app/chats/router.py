@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, status
+from fastapi import APIRouter, Depends, Path, Query, status
 from pydantic import UUID4
 
 from app.chats.schemas import (
     ChatListItem,
+    ChatListResponse,
     GetChatResponse,
     SendMessageRequest,
     SendMessageResponse,
@@ -66,13 +67,22 @@ def send_message(
 
 @router.get(
     "",
-    response_model=list[ChatListItem],
+    response_model=ChatListResponse,
     status_code=status.HTTP_200_OK,
     summary="채팅 목록 조회",
-    description="사용자의 채팅방 목록을 최신순으로 조회합니다.",
+    description=(
+        "사용자의 채팅방 목록을 최신순으로 조회합니다. "
+        "limit/offset 쿼리 파라미터로 페이징 처리합니다."
+    ),
 )
-def list_chats(chat_service: ChatServiceDep) -> list[ChatListItem]:
-    return chat_service.list_chats()
+def list_chats(
+    chat_service: ChatServiceDep,
+    limit: Annotated[
+        int, Query(ge=1, le=100, description="한 번에 조회할 채팅방 수")
+    ] = 20,
+    offset: Annotated[int, Query(ge=0, description="건너뛸 채팅방 수")] = 0,
+) -> ChatListResponse:
+    return chat_service.list_chats(limit=limit, offset=offset)
 
 
 @router.delete(

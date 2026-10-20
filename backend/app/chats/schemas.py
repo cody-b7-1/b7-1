@@ -81,6 +81,14 @@ class ChatListItem(CamelResponseModel):
     current_philosopher_id: PhilosopherIdField
 
 
+class ChatListResponse(CamelResponseModel):
+    items: list[ChatListItem] = Field(description="채팅방 목록")
+    total: int = Field(ge=0, description="전체 채팅방 수", examples=[42])
+    limit: int = Field(ge=1, description="요청한 limit", examples=[20])
+    offset: int = Field(ge=0, description="요청한 offset", examples=[0])
+    has_more: bool = Field(description="다음 데이터 존재 여부")
+
+
 # --- get_chat (GET /chats/{chat_id}) ---
 class MessageItem(CamelResponseModel):
     message_id: UUID4 = Field(
