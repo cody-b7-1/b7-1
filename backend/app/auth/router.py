@@ -266,17 +266,6 @@ def refresh_access_token() -> None:
         "204를 반환하며, 서로 다른 origin인 경우 프런트엔드 요청에는 credentials: 'include'가 필요합니다. "
         "refreshToken이 있으면 서버에서도 무효화합니다."
     ),
-    openapi_extra={
-        "parameters": [
-            {
-                "name": "refreshToken",
-                "in": "cookie",
-                "required": False,
-                "description": "HTTP 전용(HttpOnly) 리프레시 토큰 쿠키입니다.",
-                "schema": {"type": "string"},
-            }
-        ]
-    },
     responses={
         status.HTTP_204_NO_CONTENT: {
             "description": "이미 로그아웃된 경우를 포함해 로그아웃에 성공했습니다.",
