@@ -12,7 +12,7 @@ from app.auth.models.user import User
 from app.auth.security import verify_access_token
 from app.db.session import get_db
 
-#요청의 Authorization 헤더에서 Bearer 인증 정보를 추출
+# 요청의 Authorization 헤더에서 Bearer 인증 정보를 추출
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -32,14 +32,14 @@ def get_current_user(
     if credentials is None:
         raise _unauthorized()
 
-    #토큰 검증 
+    # 토큰 검증
     try:
         payload = verify_access_token(credentials.credentials)
         user_id = UUID(payload["sub"])
     except (InvalidTokenError, KeyError, ValueError, TypeError):
         raise _unauthorized() from None
 
-    #사용자 조회
+    # 사용자 조회
     user = db.scalar(
         select(User).where(
             User.user_id == user_id,

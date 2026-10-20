@@ -34,10 +34,15 @@ class CurrentUserDependencyTests(unittest.TestCase):
 
     def test_rejects_missing_or_invalid_token(self) -> None:
         for credentials in (
-            None, #인증정보 x
-            HTTPAuthorizationCredentials(scheme="Bearer", credentials="not-a-token"), #jwt 형식이 유효 x
+            None,  # 인증정보 x
             HTTPAuthorizationCredentials(
-                scheme="Bearer", credentials=create_refresh_token(uuid4()) #refresh token을 access token에 전달
+                scheme="Bearer", credentials="not-a-token"
+            ),  # jwt 형식이 유효 x
+            HTTPAuthorizationCredentials(
+                scheme="Bearer",
+                credentials=create_refresh_token(
+                    uuid4()
+                ),  # refresh token을 access token에 전달
             ),
         ):
             with self.assertRaises(HTTPException) as error:

@@ -17,7 +17,9 @@ if TYPE_CHECKING:
 class EmailVerification(CreatedAtMixin, Base):
     __tablename__ = "email_verifications"
 
-    verification_id: Mapped[UUID] = mapped_column(SAUUID(as_uuid=True), primary_key=True)
+    verification_id: Mapped[UUID] = mapped_column(
+        SAUUID(as_uuid=True), primary_key=True
+    )
     user_id: Mapped[UUID] = mapped_column(
         SAUUID(as_uuid=True), ForeignKey("users.user_id"), unique=True, nullable=False
     )

@@ -17,7 +17,9 @@ FIELD_LABELS = {
 }
 
 
-async def unhandled_exception_handler(_request: Request, _error: Exception) -> JSONResponse:
+async def unhandled_exception_handler(
+    _request: Request, _error: Exception
+) -> JSONResponse:
     """Return a safe, consistent response for unexpected server errors."""
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -61,19 +63,21 @@ def _validation_error_message(validation_error: dict) -> str:
             return message
     field = FIELD_LABELS.get(field_name)
     context = validation_error.get("ctx", {})
-    
+
     if field and error_type == "string_too_short":
         label, particle = field
         return f"{label}{particle} 최소 {context['min_length']}자 이상 입력해야 합니다."
 
     if field and error_type == "string_too_long":
         label, particle = field
-        return f"{label}{particle} 최대 {context['max_length']}자까지 입력할 수 있습니다."
+        return (
+            f"{label}{particle} 최대 {context['max_length']}자까지 입력할 수 있습니다."
+        )
 
     return validation_error["msg"]
 
 
-#정의한 예외 처리 함수를 FastAPI 애플리케이션에 등록
+# 정의한 예외 처리 함수를 FastAPI 애플리케이션에 등록
 def register_exception_handlers(app: FastAPI) -> None:
     """Register application-wide exception handlers."""
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)

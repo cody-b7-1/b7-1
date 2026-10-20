@@ -21,7 +21,7 @@ from app.dev.router import DEV_USER_EMAIL, issue_dev_access_token
 from app.main import app
 
 
-#Mock Session 
+# Mock Session
 class FakeSession:
     def __init__(self) -> None:
         self.user = None
@@ -43,7 +43,6 @@ class FakeSession:
 
 
 class DevAuthTests(unittest.TestCase):
-
     def test_sets_login_compatible_token_cookies_and_reuses_dev_user(self) -> None:
         db = FakeSession()
         first_response = Response(status_code=204)
@@ -80,19 +79,26 @@ class DevAuthTests(unittest.TestCase):
         self.assertIn("exp", payload)
         expires_at = datetime.fromtimestamp(payload["exp"], UTC)
         self.assertLessEqual(
-            abs(expires_at - (datetime.now(UTC) + timedelta(days=7))), timedelta(seconds=2)
+            abs(expires_at - (datetime.now(UTC) + timedelta(days=7))),
+            timedelta(seconds=2),
         )
-        self.assertEqual(verify_refresh_token(refresh_token)["sub"], str(db.user.user_id))
+        self.assertEqual(
+            verify_refresh_token(refresh_token)["sub"], str(db.user.user_id)
+        )
 
     def test_validates_token_types(self) -> None:
         user_id = uuid4()
         access_token = create_access_token(user_id)
         refresh_token = create_refresh_token(user_id)
 
-        with self.assertRaisesRegex(InvalidTokenError, "토큰 유형이 올바르지 않습니다."):
+        with self.assertRaisesRegex(
+            InvalidTokenError, "토큰 유형이 올바르지 않습니다."
+        ):
             verify_access_token(refresh_token)
 
-        with self.assertRaisesRegex(InvalidTokenError, "토큰 유형이 올바르지 않습니다."):
+        with self.assertRaisesRegex(
+            InvalidTokenError, "토큰 유형이 올바르지 않습니다."
+        ):
             verify_refresh_token(access_token)
 
         payload = verify_refresh_token(refresh_token)
