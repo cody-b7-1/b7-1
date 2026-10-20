@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { ApiError, login, logout, me, signUp } from "./api";
+import { ApiError, getMe, getPhilosopher, getPhilosopherList, login, logout, signUp } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -56,15 +56,50 @@ test("logout: 204 + 쿠키 만료 Set-Cookie면 null", async () => {
   expect(sent(fetch)).toMatchObject({ url: "/api/auth/logout", method: "POST" });
 });
 
-test("me: 200이면 User 반환", async () => {
+test("getMe: 200이면 User 반환", async () => {
   const fetch = mockFetch(200, { email: "a@b.c", nickname: "nick" });
 
-  expect(await me()).toEqual({ email: "a@b.c", nickname: "nick" });
+  expect(await getMe()).toEqual({ email: "a@b.c", nickname: "nick" });
   expect(sent(fetch)).toMatchObject({ url: "/api/auth/me", method: undefined });
 });
 
-test("me: 401이면 ApiError (로그아웃 상태)", async () => {
+test("getMe: 401이면 ApiError (로그아웃 상태)", async () => {
   mockFetch(401);
 
-  await expect(me()).rejects.toMatchObject({ status: 401 });
+  await expect(getMe()).rejects.toMatchObject({ status: 401 });
+});
+
+const philosopher = {
+  id: 1,
+  name: "소크라테스",
+  description: "desc",
+  profileImageUrl: "/p.png",
+};
+
+test("getPhilosopherList: 200이면 PhilosopherBrief[] 반환", async () => {
+  const fetch = mockFetch(200, [philosopher]);
+
+  expect(await getPhilosopherList()).toEqual([philosopher]);
+  expect(sent(fetch)).toMatchObject({ url: "/api/philosophers", method: undefined });
+});
+
+test("getPhilosopher: 200이면 PhilosopherDetailed 반환", async () => {
+  const detailed = {
+    ...philosopher,
+    iconImageUrl: "/i.png",
+    introduction: "intro",
+    avatarColor: "#000",
+    inkColor: "#111",
+    softColor: "#222",
+  };
+  const fetch = mockFetch(200, detailed);
+
+  expect(await getPhilosopher(1)).toEqual(detailed);
+  expect(sent(fetch)).toMatchObject({ url: "/api/philosophers/1", method: undefined });
+});
+
+test("getPhilosopher: 404면 ApiError", async () => {
+  mockFetch(404, { detail: "not found" });
+
+  await expect(getPhilosopher(999)).rejects.toMatchObject({ status: 404 });
 });

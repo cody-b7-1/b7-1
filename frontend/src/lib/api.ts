@@ -50,3 +50,25 @@ export const login = (email: string, password: string) =>
 export const logout = () => request<null>("/auth/logout", { method: "POST" });
 
 export const getMe = () => request<User>("/auth/me");
+
+// ---- philosopher ----
+export type PhilosopherBrief = {
+  id: number;
+  name: string;
+  description: string;
+  profileImageUrl: string;
+};
+
+export type PhilosopherDetailed = PhilosopherBrief & {
+  iconImageUrl: string;
+  introduction: string;
+  avatarColor: string;
+  inkColor: string;
+  softColor: string;
+};
+
+export const getPhilosopherList = () =>
+  request<PhilosopherBrief[]>("/philosophers");
+
+export const getPhilosopher = (id: number) =>
+  request<PhilosopherDetailed>(`/philosophers/${id}`);
