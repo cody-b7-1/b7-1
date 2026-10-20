@@ -120,7 +120,16 @@ class GetChatResponse(CamelResponseModel):
     chat_title: ChatTitleField
     current_philosopher_id: PhilosopherIdField
     messages: list[MessageItem] = Field(
-        description="채팅 메시지 목록",
+        description="채팅 메시지 목록 (시간 오름차순)",
+    )
+    has_more: bool = Field(
+        description="이전(더 오래된) 메시지 존재 여부",
+        examples=[True],
+    )
+    next_cursor: UUID4 | None = Field(
+        default=None,
+        description="더 오래된 메시지를 조회할 때 before 파라미터로 넘길 메시지 ID",
+        examples=["00000000-0000-4000-8000-000000000010"],
     )
     created_at: datetime = Field(
         description="채팅 생성 시각",

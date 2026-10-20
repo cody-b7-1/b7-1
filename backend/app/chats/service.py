@@ -9,6 +9,8 @@ from app.chats.models.message import Message
 from app.chats.schemas import (
     ChatListItem,
     ChatListResponse,
+    GetChatResponse,
+    MessageItem,
     StartChatRequest,
     StartChatResponse,
 )
@@ -117,5 +119,68 @@ class ChatService:
     def delete_chat(self, chat_id: UUID4) -> None:
         pass
 
-    # def get_chat(self, chat_id: UUID4) -> GetChatResponse:
-    #     pass
+    def get_chat(
+        self,
+        chat_id: UUID4,
+        limit: int = 30,
+        before: UUID4 | None = None,
+    ) -> GetChatResponse:
+        chat = self.db.get(Chat, chat_id)
+        if chat is None or chat.deleted_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="해당 채팅방을 찾을 수 없습니다.",
+            )
+
+        stmt = select(Message).where(Message.chat_id == chat_id)
+
+        # before 커서가 있으면 해당 메시지의 생성 시각 이전 데이터만 필터링
+        if before is not None:
+            cursor_msg = self.db.get(Message, before)
+            if cursor_msg is None or cursor_msg.chat_id != chat_id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="기준 메시지를 찾을 수 없습니다.",
+                )
+            stmt = stmt.where(
+                (Message.created_at < cursor_msg.created_at)
+                | (
+                    (Message.created_at == cursor_msg.created_at)
+                    & (Message.message_id < cursor_msg.message_id)
+                )
+            )
+
+        # 최신순으로 limit + 1개를 가져와 다음 페이지(has_more) 여부 판단
+        rows = list(
+            self.db.scalars(
+                stmt.order_by(Message.created_at.desc(), Message.message_id.desc()).limit(
+                    limit + 1
+                )
+            ).all()
+        )
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        next_cursor = rows[-1].message_id if has_more else None
+
+        # 화면에 보여줄 때는 시간 오름차순(과거 -> 최신)으로 뒤집어서 전달
+        rows.reverse()
+
+        return GetChatResponse(
+            chat_id=chat.chat_id,
+            chat_title=chat.title,
+            current_philosopher_id=chat.current_philosopher_id,
+            messages=[
+                MessageItem(
+                    message_id=m.message_id,
+                    sender_role=m.sender_role,
+                    philosopher_id=m.philosopher_id,
+                    content=m.content,
+                    created_at=m.created_at,
+                )
+                for m in rows
+            ],
+            has_more=has_more,
+            next_cursor=next_cursor,
+            created_at=chat.created_at,
+            updated_at=chat.updated_at,
+        )

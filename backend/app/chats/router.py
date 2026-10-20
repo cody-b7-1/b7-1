@@ -105,15 +105,26 @@ def delete_chat(chat_id: ChatIdPath, chat_service: ChatServiceDep) -> None:
     response_model=GetChatResponse,
     status_code=status.HTTP_200_OK,
     summary="채팅 상세 조회",
-    description="채팅방 정보와 전체 메시지 내역을 조회합니다.",
+    description=(
+        "채팅방 정보와 메시지 내역을 조회합니다. 기본적으로 최신 메시지 limit개를 "
+        "시간 오름차순으로 반환하며, before에 특정 메시지 ID를 전달하면 "
+        "해당 메시지보다 이전(더 오래된) 메시지를 조회합니다."
+    ),
     responses={
         status.HTTP_404_NOT_FOUND: {
-            "description": "해당 채팅방을 찾을 수 없습니다.",
+            "description": "해당 채팅방 또는 기준 메시지를 찾을 수 없습니다.",
         },
     },
 )
 def get_chat(
     chat_id: ChatIdPath,
     chat_service: ChatServiceDep,
+    limit: Annotated[
+        int, Query(ge=1, le=100, description="한 번에 조회할 메시지 수")
+    ] = 30,
+    before: Annotated[
+        UUID4 | None,
+        Query(description="이 메시지 ID보다 이전(더 오래된) 메시지만 조회"),
+    ] = None,
 ) -> GetChatResponse:
-    pass
+    return chat_service.get_chat(chat_id, limit=limit, before=before)
