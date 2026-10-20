@@ -37,6 +37,21 @@ class SignUpRequest(BaseModel):
     ]
 
 
+class SignUpResponse(BaseModel):
+    """회원가입으로 생성된 사용자 정보입니다."""
+
+    email: EmailAddress
+    nickname: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=50,
+            description="회원 닉네임입니다.",
+            examples=["철학탐험가"],
+        ),
+    ]
+
+
 class LoginRequest(BaseModel):
     """이메일과 비밀번호로 로그인하는 요청입니다."""
 
@@ -51,6 +66,23 @@ class LoginRequest(BaseModel):
     ]
 
 
+<<<<<<< HEAD
+=======
+class CurrentUserResponse(BaseModel):
+    """현재 로그인한 사용자 정보입니다."""
+
+    email: EmailAddress
+    nickname: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=50,
+            description="회원 닉네임입니다.",
+            examples=["철학탐험가"],
+        ),
+    ]
+
+>>>>>>> 70b1dfe417f141bdf25f21ceaf1748bd38ba45a4
 
 class EmailSendRequest(BaseModel):
     """이메일 인증 링크 발송 요청입니다."""
