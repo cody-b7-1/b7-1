@@ -5,7 +5,6 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 

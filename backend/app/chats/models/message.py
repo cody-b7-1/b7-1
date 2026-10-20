@@ -4,6 +4,9 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
+    UUID as SAUUID,
+)
+from sqlalchemy import (
     BigInteger,
     Boolean,
     ForeignKey,
@@ -11,7 +14,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UUID as SAUUID,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship

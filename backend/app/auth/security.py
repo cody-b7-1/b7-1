@@ -10,7 +10,6 @@ from pwdlib import PasswordHash
 
 from app.core.config import settings
 
-
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
 TOKEN_TYPE_CLAIM = "type"
