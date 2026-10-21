@@ -4,14 +4,13 @@ from uuid import UUID
 from fastapi import Cookie, Depends, HTTPException, status
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.auth.models.user import User
 from app.auth.security import (
     verify_access_token,
     verify_refresh_token,
 )
-from app.db.session import get_db
+from app.db.session import DBSession
 
 
 def _access_unauthorized() -> HTTPException:
@@ -29,7 +28,7 @@ def _refresh_unauthorized() -> HTTPException:
 
 
 def get_current_user(
-    db: Annotated[Session, Depends(get_db)],
+    db: DBSession,
     access_token: Annotated[str | None, Cookie(alias="accessToken")] = None,
 ) -> User:
     if access_token is None:

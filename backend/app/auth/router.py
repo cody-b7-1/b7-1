@@ -2,7 +2,6 @@ from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
     CurrentUser,
@@ -27,7 +26,7 @@ from app.auth.service import (
     revoke_refresh_token,
 )
 from app.core.config import settings
-from app.db.session import get_db
+from app.db.session import DBSession
 
 router = APIRouter(prefix="/auth", tags=["인증"])
 
@@ -84,7 +83,7 @@ def get_me(
 )
 def sign_up(
     request: SignUpRequest,
-    db: Annotated[Session, Depends(get_db)],
+    db: DBSession,
 ) -> SignUpResponse:
     try:
         user = create_user(db, request)
@@ -136,7 +135,7 @@ def sign_up(
 def login(
     request: LoginRequest,
     response: Response,
-    db: Annotated[Session, Depends(get_db)],
+    db: DBSession,
 ) -> None:
     try:
         access_token, refresh_token = login_user(db, request)
@@ -318,7 +317,7 @@ def refresh_access_token(
 )
 def logout(
     response: Response,
-    db: Annotated[Session, Depends(get_db)],
+    db: DBSession,
     refresh_token: Annotated[str | None, Depends(get_optional_refresh_token)],
 ) -> None:
     # Origin/CSRF 검증(403)과 요청 횟수 제한(429)은 아직 구현되지 않았습니다.
