@@ -1,5 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL ?? "/api";
-
+const BASE = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/+$/, "");
 export class ApiError extends Error {
   status: number;
   body: unknown;
@@ -14,11 +13,20 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(BASE + path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: init?.body
+      ? { "Content-Type": "application/json", ...init.headers }
+      : init?.headers,
     credentials: "include",
   });
   const text = await resp.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text; // 프록시 502 HTML 등 JSON이 아닌 응답
+    }
+  }
   if (!resp.ok) throw new ApiError(resp.status, body);
   return body as T;
 }
