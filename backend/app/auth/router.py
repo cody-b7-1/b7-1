@@ -4,8 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
-from app.auth.models.user import User
+from app.auth.dependencies import CurrentUser
 from app.auth.schemas import (
     CurrentUserResponse,
     EmailSendRequest,
@@ -44,7 +43,7 @@ router = APIRouter(prefix="/auth", tags=["인증"])
     },
 )
 def get_me(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: CurrentUser,
 ) -> CurrentUserResponse:
     """Return the authenticated user's public profile."""
     return CurrentUserResponse(
