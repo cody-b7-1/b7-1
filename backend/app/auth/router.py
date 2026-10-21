@@ -299,7 +299,8 @@ def refresh_access_token() -> None:
     description=(
         "accessToken 및 refreshToken 쿠키를 모두 만료 처리합니다. 쿠키가 없거나 만료되어도 "
         "204를 반환하며, 서로 다른 origin인 경우 프런트엔드 요청에는 credentials: 'include'가 필요합니다. "
-        "refreshToken이 있으면 서버에서도 무효화합니다."
+        "refreshToken이 있으면 서버에서도 무효화합니다. "
+        "403 Origin/CSRF 검증과 429 요청 횟수 제한은 아직 구현되지 않았습니다."
     ),
     responses={
         status.HTTP_204_NO_CONTENT: {
@@ -328,6 +329,8 @@ def logout(
     refresh_token: str | None = Cookie(default=None, alias="refreshToken"),
 ) -> None:
     """Revoke the refresh token when present and expire authentication cookies."""
+
+    # Origin/CSRF 검증(403)과 요청 횟수 제한(429)은 아직 구현되지 않았습니다.
 
     # refresh 토큰 삭제
     if refresh_token is not None:
