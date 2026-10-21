@@ -29,35 +29,6 @@ class DevAuthErrorResponse(BaseModel):
     ]
 
 
-# class DevCurrentUserResponse(BaseModel):
-#     """The authenticated local-development user."""
-
-#     user_id: UUID
-#     email: str
-
-
-# @router.get(
-#     "/auth/current-user",
-#     response_model=DevCurrentUserResponse,
-#     status_code=status.HTTP_200_OK,
-#     summary="개발용 현재 사용자 확인",
-#     description="accessToken 쿠키로 인증된 현재 개발 사용자를 반환합니다.",
-#     responses={
-#         status.HTTP_401_UNAUTHORIZED: {
-#             "description": "accessToken 쿠키가 없거나 유효하지 않습니다.",
-#         }
-#     },
-# )
-# def get_dev_current_user(
-#     current_user: User = Depends(get_current_user),
-# ) -> DevCurrentUserResponse:
-#     """Expose cookie-authentication behavior only in local development."""
-#     return DevCurrentUserResponse(
-#         user_id=current_user.user_id,
-#         email=current_user.email,
-#     )
-
-
 @router.post(
     "/auth",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -89,7 +60,10 @@ class DevAuthErrorResponse(BaseModel):
         },
     },
 )
-def issue_dev_access_token(response: Response, db: Session = Depends(get_db)) -> None:
+def issue_dev_access_token(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
 
     # scalar : SQLAlchemy Session 객체가 가진 메서드
     user = db.scalar(

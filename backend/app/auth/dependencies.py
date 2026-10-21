@@ -1,5 +1,6 @@
 """FastAPI dependencies for authenticated requests."""
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import Cookie, Depends, HTTPException, status
@@ -20,8 +21,8 @@ def _unauthorized() -> HTTPException:
 
 
 def get_current_user(
-    access_token: str | None = Cookie(default=None, alias="accessToken"),
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
+    access_token: Annotated[str | None, Cookie(alias="accessToken")] = None,
 ) -> User:
     """Validate the access-token cookie and return its non-deleted user."""
     if access_token is None:
