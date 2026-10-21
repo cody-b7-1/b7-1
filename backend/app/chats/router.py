@@ -153,14 +153,12 @@ def get_chat(
     ] = 30,
     cursor: Annotated[
         UUID4 | None,
-        Query(
-            description="이 메시지 ID보다 이전(더 오래된) 메시지를 조회하기 위한 커서"
-        ),
+        Query(description="이전 메시지 목록을 조회하기 위한 커서 (메시지 ID)"),
     ] = None,
 ) -> GetChatResponse:
     return chat_service.get_chat(
         chat_id=chat_id,
+        user_id=current_user.user_id,
         limit=limit,
         cursor=cursor,
-        user_id=current_user.user_id,
     )

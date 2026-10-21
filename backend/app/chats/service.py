@@ -144,12 +144,7 @@ class ChatService:
         )
 
         if cursor is not None:
-            cursor_chat = self.db.get(Chat, cursor)
-            if cursor_chat is None or cursor_chat.deleted_at is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="기준 채팅방을 찾을 수 없습니다.",
-                )
+            cursor_chat = self._get_owned_chat(cursor, user_id)
             stmt = stmt.where(
                 (Chat.updated_at < cursor_chat.updated_at)
                 | (
@@ -242,7 +237,9 @@ class ChatService:
         chat_id: UUID,
         user_id: UUID,
     ) -> None:
-        pass
+        chat = self._get_owned_chat(chat_id, user_id)
+        chat.deleted_at = utc_now()
+        self.db.commit()
 
     # GET /chats/{chat_id}
     def get_chat(
@@ -252,12 +249,7 @@ class ChatService:
         limit: int = 30,
         cursor: UUID | None = None,
     ) -> GetChatResponse:
-        chat = self.db.get(Chat, chat_id)
-        if chat is None or chat.deleted_at is not None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 채팅방을 찾을 수 없습니다.",
-            )
+        chat = self._get_owned_chat(chat_id, user_id)
 
         stmt = select(Message).where(Message.chat_id == chat_id)
 
