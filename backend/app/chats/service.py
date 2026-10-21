@@ -101,7 +101,7 @@ class ChatService:
             current_philosopher_id=philosopher.philosopher_id,
             title=chat_title,
             created_at=now,
-            updated_at=now + timedelta(seconds=1),
+            updated_at=now,
         )
 
         # 3. 사용자 질문 및 철학자 답변 메시지 생성 (한 턴)
@@ -121,20 +121,7 @@ class ChatService:
             chat_id=chat.chat_id,
             chat_title=chat.title,
             messages=[
-                MessageItem(
-                    message_id=user_message.message_id,
-                    sender_role=user_message.sender_role,
-                    philosopher_id=user_message.philosopher_id,
-                    content=user_message.content,
-                    created_at=user_message.created_at,
-                ),
-                MessageItem(
-                    message_id=assistant_message.message_id,
-                    sender_role=assistant_message.sender_role,
-                    philosopher_id=assistant_message.philosopher_id,
-                    content=assistant_message.content,
-                    created_at=assistant_message.created_at,
-                ),
+                MessageItem.model_validate(m) for m in (user_message, assistant_message)
             ],
         )
 
@@ -196,7 +183,7 @@ class ChatService:
         now = utc_now()
         new_messages: list[Message] = []
 
-        # 3. 철학자가 변경된 경우에만 시스템 메시지 추가 및 채팅방 업데이트
+        # 3. 철학자가 변경된 경우에만 시스템 메시지 추가 및 시각 갱신
         if chat.current_philosopher_id != philosopher.philosopher_id:
             system_message = Message(
                 message_id=uuid4(),
@@ -208,16 +195,14 @@ class ChatService:
             )
             chat.current_philosopher_id = philosopher.philosopher_id
             new_messages.append(system_message)
-            turn_base_time = now + timedelta(seconds=1)
-        else:
-            turn_base_time = now
+            now += timedelta(seconds=1)
 
         # 4. 사용자 질문 및 철학자 답변 메시지 생성 (실패 시 여기서 503 발생 -> 메모리/DB 변경 없이 안전하게 중단)
         user_message, assistant_message = self._create_dialogue_turn(
             chat_id=chat.chat_id,
             prompt=request.prompt,
             philosopher=philosopher,
-            base_time=turn_base_time,
+            base_time=now,
         )
 
         # 5. 시간 순서대로 메시지 배치 ([SYSTEM, USER, PHILOSOPHER])
@@ -232,16 +217,7 @@ class ChatService:
 
         # 8. 응답 스키마 반환
         return SendMessageResponse(
-            messages=[
-                MessageItem(
-                    message_id=message.message_id,
-                    sender_role=message.sender_role,
-                    philosopher_id=message.philosopher_id,
-                    content=message.content,
-                    created_at=message.created_at,
-                )
-                for message in new_messages
-            ],
+            messages=[MessageItem.model_validate(m) for m in new_messages],
         )
 
     # DELETE /chats/{chat_id}
@@ -293,16 +269,7 @@ class ChatService:
             chat_id=chat.chat_id,
             chat_title=chat.title,
             current_philosopher_id=chat.current_philosopher_id,
-            messages=[
-                MessageItem(
-                    message_id=m.message_id,
-                    sender_role=m.sender_role,
-                    philosopher_id=m.philosopher_id,
-                    content=m.content,
-                    created_at=m.created_at,
-                )
-                for m in reversed(paged_messages)
-            ],
+            messages=[MessageItem.model_validate(m) for m in reversed(paged_messages)],
             has_more=has_more,
             next_cursor=next_cursor,
             created_at=chat.created_at,
