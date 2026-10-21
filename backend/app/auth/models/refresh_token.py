@@ -5,13 +5,15 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
+    TIMESTAMP,
     Boolean,
     ForeignKey,
     Index,
     String,
-    TIMESTAMP,
-    UUID as SAUUID,
     text,
+)
+from sqlalchemy import (
+    UUID as SAUUID,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

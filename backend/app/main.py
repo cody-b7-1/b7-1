@@ -4,9 +4,11 @@ from fastapi import FastAPI, status
 from pydantic import BaseModel, Field
 
 from app.auth.router import router as auth_router
+from app.chats.router import router as chats_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.db import model_registry as _model_registry  # noqa: F401
+from app.philosophers.router import router as philosophers_router
 
 
 class HealthResponse(BaseModel):
@@ -27,6 +29,8 @@ app = FastAPI(
 
 register_exception_handlers(app)
 app.include_router(auth_router, prefix="/api")
+app.include_router(chats_router, prefix="/api")
+app.include_router(philosophers_router, prefix="/api")
 
 
 if settings.is_local:
