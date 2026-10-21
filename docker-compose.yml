@@ -6,10 +6,12 @@ services:
       - .env
     environment:
       DB_HOST: "${DB_HOST_DOCKER}"
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
-    volumes:
-      - ./backend:/app
+      DB_PORT: "3306"
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+      APP_ENV: "${APP_ENV:-production}"
     depends_on:
       mariadb:
         condition: service_healthy

@@ -43,61 +43,8 @@ PromptField = Annotated[
     ),
 ]
 
-AnswerField = Annotated[
-    str,
-    Field(
-        description="철학자 답변",
-        examples=["행복은 덕에 따르는 영혼의 활동입니다."],
-    ),
-]
 
-
-# --- start_chat (POST /chats) ---
-class StartChatRequest(CamelModel):
-    prompt: PromptField
-    philosopher_id: PhilosopherIdField
-
-
-class StartChatResponse(CamelResponseModel):
-    chat_id: ChatIdField
-    chat_title: ChatTitleField
-    answer: AnswerField
-    philosopher_id: PhilosopherIdField
-
-
-# --- send_message (POST /chats/{chat_id}/messages) ---
-class SendMessageRequest(CamelModel):
-    prompt: PromptField
-    philosopher_id: PhilosopherIdField
-
-
-class SendMessageResponse(CamelResponseModel):
-    chat_id: ChatIdField
-    answer: AnswerField
-    philosopher_id: PhilosopherIdField
-
-
-# --- list_chats (GET /chats) ---
-class ChatListItem(CamelResponseModel):
-    chat_id: ChatIdField
-    chat_title: ChatTitleField
-    current_philosopher_id: PhilosopherIdField
-
-
-class ChatListResponse(CamelResponseModel):
-    items: list[ChatListItem] = Field(description="채팅방 목록")
-    has_more: bool = Field(
-        description="다음 데이터 존재 여부",
-        examples=[True],
-    )
-    next_cursor: UUID4 | None = Field(
-        default=None,
-        description="다음 대화 목록을 조회할 때 cursor 파라미터로 넘길 채팅방 ID",
-        examples=["00000000-0000-4000-8000-000000000001"],
-    )
-
-
-# --- get_chat (GET /chats/{chat_id}) ---
+# --- 공통 메시지 아이템 ---
 class MessageItem(CamelResponseModel):
     message_id: UUID4 = Field(
         description="메시지 ID",
@@ -123,6 +70,53 @@ class MessageItem(CamelResponseModel):
     )
 
 
+# --- start_chat (POST /chats) ---
+class StartChatRequest(CamelModel):
+    prompt: PromptField
+    philosopher_id: PhilosopherIdField
+
+
+class StartChatResponse(CamelResponseModel):
+    chat_id: ChatIdField
+    chat_title: ChatTitleField
+    messages: list[MessageItem] = Field(
+        description="새로 생성된 첫 대화 메시지 목록 [사용자 질문, 철학자 답변]",
+    )
+
+
+# --- send_message (POST /chats/{chat_id}/messages) ---
+class SendMessageRequest(CamelModel):
+    prompt: PromptField
+    philosopher_id: PhilosopherIdField
+
+
+class SendMessageResponse(CamelResponseModel):
+    messages: list[MessageItem] = Field(
+        description="이번 턴에 새로 생성된 메시지 목록 (시간순)",
+    )
+
+
+# --- list_chats (GET /chats) ---
+class ChatListItem(CamelResponseModel):
+    chat_id: ChatIdField
+    chat_title: ChatTitleField
+    current_philosopher_id: PhilosopherIdField
+
+
+class ChatListResponse(CamelResponseModel):
+    items: list[ChatListItem] = Field(description="채팅방 목록")
+    has_more: bool = Field(
+        description="다음 데이터 존재 여부",
+        examples=[True],
+    )
+    next_cursor: UUID4 | None = Field(
+        default=None,
+        description="다음 대화 목록을 조회할 때 cursor 파라미터로 넘길 채팅방 ID",
+        examples=["00000000-0000-4000-8000-000000000001"],
+    )
+
+
+# --- get_chat (GET /chats/{chat_id}) ---
 class GetChatResponse(CamelResponseModel):
     chat_id: ChatIdField
     chat_title: ChatTitleField
