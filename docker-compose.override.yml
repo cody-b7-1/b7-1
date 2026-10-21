@@ -9,3 +9,7 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
+
+  mariadb:
+    ports:
+      - "${DB_PORT:-3306}:3306"
