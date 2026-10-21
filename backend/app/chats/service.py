@@ -1,7 +1,6 @@
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
-from pydantic import UUID4
 from sqlalchemy import select
 
 from app.chats.enums import SenderRole
@@ -12,46 +11,57 @@ from app.chats.schemas import (
     ChatListResponse,
     GetChatResponse,
     MessageItem,
+    SendMessageRequest,
+    SendMessageResponse,
     StartChatRequest,
     StartChatResponse,
 )
 from app.db.session import DBSession
 from app.philosophers.models.philosopher import Philosopher
 
-# todo : 이후에 수정될 예정
-
 
 class ChatService:
     def __init__(self, db: DBSession) -> None:
         self.db = db
 
-    def start_chat(
-        self,
-        request: StartChatRequest,
-        user_id: UUID | None = None,
-    ) -> StartChatResponse:
-        # 1. 대화할 철학자 조회 및 활성화 여부 확인
-        philosopher = self.db.get(Philosopher, request.philosopher_id)
+    def _get_owned_chat(self, chat_id: UUID, user_id: UUID) -> Chat:
+        chat = self.db.get(Chat, chat_id)
+        if chat is None or chat.deleted_at is not None or chat.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="해당 채팅방을 찾을 수 없습니다.",
+            )
+        return chat
+
+    def _get_active_philosopher(self, philosopher_id: int) -> Philosopher:
+        philosopher = self.db.get(Philosopher, philosopher_id)
         if philosopher is None or not philosopher.is_active:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="해당 철학자를 찾을 수 없습니다.",
             )
+        return philosopher
 
-        # 2. 채팅방(Chat) 생성 (제목은 프롬프트 앞부분 최대 80자로 임시 설정하거나 LLM으로 요약)
-        chat_title = request.prompt[:80]
+    # POST /chats
+    def start_chat(
+        self,
+        request: StartChatRequest,
+        user_id: UUID,
+    ) -> StartChatResponse:
+        # 1. 대화할 철학자 조회 및 활성화 여부 확인
+        philosopher = self._get_active_philosopher(request.philosopher_id)
+
+        # 2. 채팅방(Chat) 생성 (첫 줄 기준 최대 80자, 추후 LLM 요약으로 고도화)
+        first_line = request.prompt.strip().splitlines()[0]
+        chat_title = first_line[:80]
         chat = Chat(
             chat_id=uuid4(),
-            user_id=user_id
-            or UUID(
-                "00000000-0000-4000-8000-000000000001"
-            ),  # TODO: 인증(Auth) 연동 후 실제 로그인 유저의 user_id 사용
+            user_id=user_id,
             current_philosopher_id=philosopher.philosopher_id,
             title=chat_title,
         )
-        # self.db.add(chat)
 
-        # 3. 사용자 첫 질문 메시지 저장
+        # 3. 사용자 첫 질문 메시지 생성
         user_message = Message(
             message_id=uuid4(),
             chat_id=chat.chat_id,
@@ -60,7 +70,7 @@ class ChatService:
             content=request.prompt,
         )
 
-        # 4. 철학자(AI) 첫 답변 생성 및 메시지 저장 (TODO: LLM API 호출로 교체)
+        # 4. 철학자(AI) 첫 답변 생성 (TODO: LLM API 호출로 교체, llm 메시지 생성 여부 is_success로 저장)
         answer = f"{philosopher.name}의 답변입니다."
         assistant_message = Message(
             message_id=uuid4(),
@@ -71,30 +81,41 @@ class ChatService:
             is_success=True,
         )
 
-        # self.db.add_all([user_message, assistant_message])
-        # self.db.commit()
-        _ = (user_message, assistant_message)
+        # 5. DB 저장 (원자적 커밋)
+        self.db.add_all([chat, user_message, assistant_message])
+        self.db.commit()
 
-        # 5. 응답 스키마 반환
+        # 6. 응답 스키마 반환
         return StartChatResponse(
             chat_id=chat.chat_id,
             chat_title=chat.title,
-            answer=answer,
-            philosopher_id=philosopher.philosopher_id,
+            messages=[
+                MessageItem(
+                    message_id=user_message.message_id,
+                    sender_role=user_message.sender_role,
+                    philosopher_id=user_message.philosopher_id,
+                    content=user_message.content,
+                    created_at=user_message.created_at,
+                ),
+                MessageItem(
+                    message_id=assistant_message.message_id,
+                    sender_role=assistant_message.sender_role,
+                    philosopher_id=assistant_message.philosopher_id,
+                    content=assistant_message.content,
+                    created_at=assistant_message.created_at,
+                ),
+            ],
         )
 
+    # GET /chats
     def list_chats(
         self,
+        user_id: UUID,
         limit: int = 20,
-        cursor: UUID4 | None = None,
-        user_id: UUID4 | None = None,
+        cursor: UUID | None = None,
     ) -> ChatListResponse:
-        target_user_id = user_id or UUID(
-            "00000000-0000-4000-8000-000000000001"
-        )  # TODO: 인증(Auth) 연동 후 실제 로그인 유저의 user_id 사용
-
         stmt = select(Chat).where(
-            Chat.user_id == target_user_id,
+            Chat.user_id == user_id,
             Chat.deleted_at.is_(None),
         )
 
@@ -114,9 +135,7 @@ class ChatService:
             )
 
         rows = self.db.scalars(
-            stmt.order_by(
-                Chat.updated_at.desc(), Chat.chat_id.desc()
-            ).limit(limit + 1)
+            stmt.order_by(Chat.updated_at.desc(), Chat.chat_id.desc()).limit(limit + 1)
         ).all()
         has_more = len(rows) > limit
         paged_chats = rows[:limit]
@@ -135,14 +154,30 @@ class ChatService:
             next_cursor=next_cursor,
         )
 
-    def delete_chat(self, chat_id: UUID4) -> None:
+    # POST /chats/{chat_id}/messages
+    def send_message(
+        self,
+        chat_id: UUID,
+        request: SendMessageRequest,
+        user_id: UUID,
+    ) -> SendMessageResponse:
+        raise NotImplementedError
+
+    # DELETE /chats/{chat_id}
+    def delete_chat(
+        self,
+        chat_id: UUID,
+        user_id: UUID,
+    ) -> None:
         pass
 
+    # GET /chats/{chat_id}
     def get_chat(
         self,
-        chat_id: UUID4,
+        chat_id: UUID,
+        user_id: UUID,
         limit: int = 30,
-        cursor: UUID4 | None = None,
+        cursor: UUID | None = None,
     ) -> GetChatResponse:
         chat = self.db.get(Chat, chat_id)
         if chat is None or chat.deleted_at is not None:
