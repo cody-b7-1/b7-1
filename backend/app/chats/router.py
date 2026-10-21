@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, status
 from pydantic import UUID4
 
+from app.auth.dependencies import CurrentUser, get_current_user
 from app.chats.schemas import (
     ChatListResponse,
     GetChatResponse,
@@ -13,7 +14,11 @@ from app.chats.schemas import (
 )
 from app.chats.service import ChatService
 
-router = APIRouter(prefix="/chats", tags=["채팅"])
+router = APIRouter(
+    prefix="/chats",
+    tags=["채팅"],
+    dependencies=[Depends(get_current_user)],
+)
 
 ChatServiceDep = Annotated[ChatService, Depends(ChatService)]
 ChatIdPath = Annotated[
@@ -40,8 +45,9 @@ ChatIdPath = Annotated[
 def start_chat(
     request: StartChatRequest,
     chat_service: ChatServiceDep,
+    current_user: CurrentUser,
 ) -> StartChatResponse:
-    return chat_service.start_chat(request)
+    return chat_service.start_chat(request, user_id=current_user.user_id)
 
 
 @router.post(
@@ -60,8 +66,13 @@ def send_message(
     chat_id: ChatIdPath,
     request: SendMessageRequest,
     chat_service: ChatServiceDep,
+    current_user: CurrentUser,
 ) -> SendMessageResponse:
-    pass
+    return chat_service.send_message(
+        chat_id=chat_id,
+        request=request,
+        user_id=current_user.user_id,
+    )
 
 
 @router.get(
@@ -76,6 +87,7 @@ def send_message(
 )
 def list_chats(
     chat_service: ChatServiceDep,
+    current_user: CurrentUser,
     limit: Annotated[
         int, Query(ge=1, le=100, description="한 번에 조회할 채팅방 수")
     ] = 20,
@@ -84,7 +96,11 @@ def list_chats(
         Query(description="다음 대화 목록을 조회하기 위한 커서 (채팅방 ID)"),
     ] = None,
 ) -> ChatListResponse:
-    return chat_service.list_chats(limit=limit, cursor=cursor)
+    return chat_service.list_chats(
+        limit=limit,
+        cursor=cursor,
+        user_id=current_user.user_id,
+    )
 
 
 @router.delete(
@@ -98,8 +114,12 @@ def list_chats(
         },
     },
 )
-def delete_chat(chat_id: ChatIdPath, chat_service: ChatServiceDep) -> None:
-    return chat_service.delete_chat(chat_id)
+def delete_chat(
+    chat_id: ChatIdPath,
+    chat_service: ChatServiceDep,
+    current_user: CurrentUser,
+) -> None:
+    return chat_service.delete_chat(chat_id=chat_id, user_id=current_user.user_id)
 
 
 @router.get(
@@ -121,6 +141,7 @@ def delete_chat(chat_id: ChatIdPath, chat_service: ChatServiceDep) -> None:
 def get_chat(
     chat_id: ChatIdPath,
     chat_service: ChatServiceDep,
+    current_user: CurrentUser,
     limit: Annotated[
         int, Query(ge=1, le=100, description="한 번에 조회할 메시지 수")
     ] = 30,
@@ -131,4 +152,9 @@ def get_chat(
         ),
     ] = None,
 ) -> GetChatResponse:
-    return chat_service.get_chat(chat_id, limit=limit, cursor=cursor)
+    return chat_service.get_chat(
+        chat_id=chat_id,
+        limit=limit,
+        cursor=cursor,
+        user_id=current_user.user_id,
+    )
