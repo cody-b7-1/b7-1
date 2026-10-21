@@ -16,6 +16,7 @@ from app.auth.schemas import (
     SignUpRequest,
     SignUpResponse,
 )
+from app.auth.security import RefreshTokenPayload
 from app.auth.service import (
     EmailAlreadyRegisteredError,
     EmailNotFoundError,
@@ -27,7 +28,6 @@ from app.auth.service import (
     revoke_refresh_token,
     rotate_refresh_token,
 )
-from app.auth.security import RefreshTokenPayload
 from app.core.config import settings
 from app.db.session import DBSession
 
@@ -249,19 +249,10 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
     description=(
         "HTTP 전용(HttpOnly) refreshToken 쿠키로 accessToken과 refreshToken을 갱신합니다. "
         "갱신된 토큰은 쿠키로 설정하며 응답 본문은 반환하지 않습니다. 이 엔드포인트는 액세스 "
-        "토큰이 필요하지 않으며, 서로 다른 origin인 경우 프런트엔드 요청에는 credentials: 'include'가 필요합니다."
+        "토큰이 필요하지 않으며, refreshToken 쿠키가 없거나 만료·위조된 경우 401을 "
+        "반환합니다. 서로 다른 origin인 경우 프런트엔드 요청에는 credentials: 'include'가 "
+        "필요합니다."
     ),
-    openapi_extra={
-        "parameters": [
-            {
-                "name": "refreshToken",
-                "in": "cookie",
-                "required": True,
-                "description": "HTTP 전용(HttpOnly) 리프레시 토큰 쿠키입니다.",
-                "schema": {"type": "string"},
-            }
-        ]
-    },
     responses={
         status.HTTP_204_NO_CONTENT: {
             "description": "accessToken 및 refreshToken 갱신에 성공했습니다.",
@@ -281,7 +272,10 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
             "description": "리프레시 토큰이 누락·만료·위조·무효화되었거나 재사용되었습니다.",
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "계정을 사용할 수 없거나 CSRF 또는 Origin 검증에 실패했습니다.",
+            "description": (
+                "계정을 사용할 수 없거나 CSRF 또는 Origin 검증에 실패한 경우의 "
+                "응답입니다. 현재는 구현되지 않았습니다."
+            ),
         },
     },
 )

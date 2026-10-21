@@ -269,6 +269,5 @@ class AuthRouterTests(unittest.TestCase):
             self.assertEqual(raised.exception.status_code, 401)
             rotate.assert_not_called()
 
-
 if __name__ == "__main__":
     unittest.main()
