@@ -24,7 +24,6 @@ from app.dev.router import DEV_USER_EMAIL, issue_dev_access_token
 from app.main import app
 
 
-# Mock Session
 class FakeSession:
     def __init__(self) -> None:
         self.user = None

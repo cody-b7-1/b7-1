@@ -1,13 +1,11 @@
-"""Shared primitives for issuing authentication tokens."""
-
 import hashlib
 import hmac
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict, cast
 from uuid import UUID, uuid4
 
 import jwt
-from jwt.exceptions import InvalidTokenError
+from jwt.exceptions import InvalidTokenError, MissingRequiredClaimError
 from pwdlib import PasswordHash
 
 from app.core.config import settings
@@ -17,6 +15,14 @@ REFRESH_TOKEN_TYPE = "refresh"
 TOKEN_TYPE_CLAIM = "type"
 TokenType = Literal["access", "refresh"]
 password_hasher = PasswordHash.recommended()
+
+
+class RefreshTokenPayload(TypedDict):
+    sub: str
+    iat: int
+    exp: int
+    type: Literal["refresh"]
+    jti: str
 
 
 def hash_password(password: str) -> str:
@@ -85,7 +91,11 @@ def create_refresh_token(
     )
 
 
-def verify_token(token: str, expected_type: TokenType) -> dict[str, Any]:
+def verify_token(
+    token: str,
+    expected_type: TokenType,
+    required_claims: tuple[str, ...] = (),
+) -> dict[str, Any]:
     """JWT의 서명, 만료 시간, 토큰 유형을 검증합니다."""
     payload = jwt.decode(
         token,
@@ -101,6 +111,10 @@ def verify_token(token: str, expected_type: TokenType) -> dict[str, Any]:
     if token_type != expected_type:
         raise InvalidTokenError("토큰 유형이 올바르지 않습니다.")
 
+    for claim in required_claims:
+        if claim not in payload:
+            raise MissingRequiredClaimError(claim)  # InvalidTokenError를 상속
+
     return payload
 
 
@@ -109,6 +123,18 @@ def verify_access_token(token: str) -> dict[str, Any]:
     return verify_token(token, ACCESS_TOKEN_TYPE)
 
 
-def verify_refresh_token(token: str) -> dict[str, Any]:
+def verify_refresh_token(token: str) -> RefreshTokenPayload:
     """리프레시 토큰을 검증합니다."""
-    return verify_token(token, REFRESH_TOKEN_TYPE)
+    payload = verify_token(
+        token,
+        REFRESH_TOKEN_TYPE,
+        ("sub", "iat", "exp", TOKEN_TYPE_CLAIM, "jti"),
+    )
+
+    try:
+        UUID(payload["sub"])
+        UUID(payload["jti"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise InvalidTokenError("리프레시 토큰 클레임이 올바르지 않습니다.") from error
+
+    return cast(RefreshTokenPayload, payload)

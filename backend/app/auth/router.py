@@ -4,16 +4,18 @@ from typing import Annotated
 from fastapi import (
     APIRouter,
     BackgroundTasks,
-    Cookie,
     Depends,
     HTTPException,
     Response,
     status,
 )
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
-from app.auth.dependencies import CurrentUser
+from app.auth.dependencies import (
+    CurrentUser,
+    get_optional_refresh_token,
+    get_refresh_token,
+)
 from app.auth.email import deliver_email_verification_email
 from app.auth.models.user import User
 from app.auth.schemas import (
@@ -37,7 +39,7 @@ from app.auth.service import (
     verify_email_verification_token,
 )
 from app.core.config import settings
-from app.db.session import get_db
+from app.db.session import DBSession
 
 router = APIRouter(prefix="/auth", tags=["인증"])
 
@@ -59,7 +61,6 @@ router = APIRouter(prefix="/auth", tags=["인증"])
 def get_me(
     current_user: CurrentUser,
 ) -> CurrentUserResponse:
-    """Return the authenticated user's public profile."""
     return CurrentUserResponse(
         email=current_user.email,
         nickname=current_user.nickname,
@@ -96,9 +97,8 @@ def get_me(
 def sign_up(
     request: SignUpRequest,
     background_tasks: BackgroundTasks,
-    db: Annotated[Session, Depends(get_db)],
+    db: DBSession,
 ) -> SignUpResponse:
-    """Create a new user account."""
     try:
         user = create_user(db, request)
     except EmailAlreadyRegisteredError:
@@ -151,9 +151,8 @@ def sign_up(
 def login(
     request: LoginRequest,
     response: Response,
-    db: Annotated[Session, Depends(get_db)],
+    db: DBSession,
 ) -> None:
-    """Authenticate a user and set access and refresh token cookies."""
     try:
         access_token, refresh_token = login_user(db, request)
     except (EmailNotFoundError, PasswordMismatchError):
@@ -216,9 +215,7 @@ def login(
     },
 )
 def send_email_verification_link(
-    request: EmailSendRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    request: EmailSendRequest, background_tasks: BackgroundTasks, db: DBSession
 ) -> None:
     """Send a new verification email without revealing account existence."""
 
@@ -263,9 +260,7 @@ def send_email_verification_link(
         },
     },
 )
-def verify_email_link_token(
-    request: EmailVerifyRequest, db: Session = Depends(get_db)
-) -> None:
+def verify_email_link_token(request: EmailVerifyRequest, db: DBSession) -> None:
     """Consume an email verification token and mark the account as verified."""
     try:
         # 토큰 검증
@@ -322,11 +317,9 @@ def verify_email_link_token(
         },
     },
 )
-def refresh_access_token() -> None:
-    """Declare the token-refresh contract; refresh behavior is not implemented yet."""
-
-    # Cookie validation, token rotation, JWT issuance, and CSRF/Origin checks are deferred.
-    # On success, accessToken and refreshToken will be issued as cookies.
+def refresh_access_token(
+    refresh_token: Annotated[str, Depends(get_refresh_token)],
+) -> None:
     return
 
 
@@ -365,11 +358,9 @@ def refresh_access_token() -> None:
 )
 def logout(
     response: Response,
-    db: Annotated[Session, Depends(get_db)],
-    refresh_token: str | None = Cookie(default=None, alias="refreshToken"),
+    db: DBSession,
+    refresh_token: Annotated[str | None, Depends(get_optional_refresh_token)],
 ) -> None:
-    """Revoke the refresh token when present and expire authentication cookies."""
-
     # Origin/CSRF 검증(403)과 요청 횟수 제한(429)은 아직 구현되지 않았습니다.
 
     # refresh 토큰 삭제
