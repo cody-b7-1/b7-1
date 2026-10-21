@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import UUID4, Field
+from pydantic import UUID4, Field, StringConstraints
 
 from app.chats.enums import SenderRole
 from app.core.schemas import CamelModel, CamelResponseModel
@@ -35,9 +35,12 @@ PhilosopherIdField = Annotated[
 
 PromptField = Annotated[
     str,
-    Field(
+    StringConstraints(
+        strip_whitespace=True,
         min_length=1,
         max_length=1000,
+    ),
+    Field(
         description="사용자 입력 프롬프트",
         examples=["진정한 행복이란 무엇인가요?"],
     ),
