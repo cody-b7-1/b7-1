@@ -1,9 +1,14 @@
 from uuid import UUID, uuid4
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 
 from app.chats.enums import SenderRole
+from app.chats.exceptions import (
+    ChatAIUnavailableError,
+    ChatNotFoundError,
+    CursorMessageNotFoundError,
+    PhilosopherNotFoundError,
+)
 from app.chats.models.chat import Chat
 from app.chats.models.message import Message
 from app.chats.schemas import (
@@ -28,19 +33,13 @@ class ChatService:
     def _get_owned_chat(self, chat_id: UUID, user_id: UUID) -> Chat:
         chat = self.db.get(Chat, chat_id)
         if chat is None or chat.deleted_at is not None or chat.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 채팅방을 찾을 수 없습니다.",
-            )
+            raise ChatNotFoundError()
         return chat
 
     def _get_active_philosopher(self, philosopher_id: int) -> Philosopher:
         philosopher = self.db.get(Philosopher, philosopher_id)
         if philosopher is None or not philosopher.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 철학자를 찾을 수 없습니다.",
-            )
+            raise PhilosopherNotFoundError()
         return philosopher
 
     def _create_dialogue_turn(
@@ -54,10 +53,7 @@ class ChatService:
             # answer = self._call_llm(prompt, philosopher)
             answer = f"{philosopher.name}의 답변입니다."
         except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="철학자 AI와의 연결이 일시적으로 원활하지 않습니다. 잠시 후 다시 시도해주세요.",
-            ) from exc
+            raise ChatAIUnavailableError() from exc
 
         # 2. 사용자 질문 메시지 생성
         user_message = Message(
@@ -257,10 +253,7 @@ class ChatService:
         if cursor is not None:
             cursor_msg = self.db.get(Message, cursor)
             if cursor_msg is None or cursor_msg.chat_id != chat_id:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="기준 메시지를 찾을 수 없습니다.",
-                )
+                raise CursorMessageNotFoundError()
             stmt = stmt.where(
                 (Message.created_at < cursor_msg.created_at)
                 | (
