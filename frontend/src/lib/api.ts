@@ -63,16 +63,16 @@ export const getMe = () => request<User>("/auth/me");
 export type PhilosopherBrief = {
   id: number;
   name: string;
-  description: string;
-  profileImageUrl: string;
+  description: string | null;
+  profileImageUrl: string | null;
 };
 
 export type PhilosopherDetailed = PhilosopherBrief & {
-  iconImageUrl: string;
-  introduction: string;
-  avatarColor: string;
-  inkColor: string;
-  softColor: string;
+  iconImageUrl: string | null;
+  introduction: string | null;
+  avatarColor: string | null;
+  inkColor: string | null;
+  softColor: string | null;
 };
 
 export const getPhilosopherList = () =>
@@ -80,3 +80,5 @@ export const getPhilosopherList = () =>
 
 export const getPhilosopher = (id: number) =>
   request<PhilosopherDetailed>(`/philosophers/${id}`);
+
+// ---- chat ----
