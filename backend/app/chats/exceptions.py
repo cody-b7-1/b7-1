@@ -1,4 +1,4 @@
-"""Chat domain specific exceptions, messages, and labels."""
+"""채팅 도메인 전용 예외, 필수값 메시지, 필드 라벨."""
 
 from fastapi import status
 
@@ -20,7 +20,7 @@ CHAT_FIELD_LABELS: dict[str, tuple[str, str]] = {
 
 
 class ChatDomainError(Exception):
-    """Base exception for chat domain errors."""
+    """채팅 도메인 예외의 기본 클래스."""
 
     status_code: int = status.HTTP_400_BAD_REQUEST
     detail: str = "채팅 요청을 처리할 수 없습니다."
@@ -32,28 +32,37 @@ class ChatDomainError(Exception):
 
 
 class ChatNotFoundError(ChatDomainError):
-    """Raised when a chat does not exist, is soft-deleted, or is not owned by the user."""
+    """채팅방이 없거나, 삭제되었거나, 요청한 사용자의 소유가 아닐 때 발생한다."""
 
     status_code: int = status.HTTP_404_NOT_FOUND
     detail: str = "해당 채팅방을 찾을 수 없습니다."
 
 
 class PhilosopherNotFoundError(ChatDomainError):
-    """Raised when the requested philosopher does not exist or is inactive."""
+    """요청한 철학자가 없거나 비활성 상태일 때 발생한다."""
 
     status_code: int = status.HTTP_404_NOT_FOUND
     detail: str = "해당 철학자를 찾을 수 없습니다."
 
 
 class CursorMessageNotFoundError(ChatDomainError):
-    """Raised when the pagination cursor message does not exist or belongs to another chat."""
+    """페이지네이션 기준(cursor) 메시지가 없거나 다른 채팅방의 메시지일 때 발생한다."""
 
     status_code: int = status.HTTP_404_NOT_FOUND
     detail: str = "기준 메시지를 찾을 수 없습니다."
 
 
+class ChatBusyError(ChatDomainError):
+    """같은 채팅방을 다른 요청이 이미 처리 중일 때 발생한다."""
+
+    status_code: int = status.HTTP_409_CONFLICT
+    detail: str = (
+        "이전 질문에 대한 답변을 생성하는 중입니다. 잠시 후 다시 시도해주세요."
+    )
+
+
 class ChatAIUnavailableError(ChatDomainError):
-    """Raised when the philosopher AI (LLM) service fails or times out."""
+    """철학자 AI(LLM) 호출이 실패하거나 시간 초과되었을 때 발생한다."""
 
     status_code: int = status.HTTP_503_SERVICE_UNAVAILABLE
     detail: str = (

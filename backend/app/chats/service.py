@@ -2,10 +2,12 @@ from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from app.chats.enums import SenderRole
 from app.chats.exceptions import (
     ChatAIUnavailableError,
+    ChatBusyError,
     ChatNotFoundError,
     CursorMessageNotFoundError,
     PhilosopherNotFoundError,
@@ -26,15 +28,44 @@ from app.db.mixins import utc_now
 from app.db.session import DBSession
 from app.philosophers.models.philosopher import Philosopher
 
+# MariaDB(1205: 잠금 대기 초과, NOWAIT 시 즉시 반환), MySQL 8(3572: NOWAIT 잠금 실패)
+LOCK_NOT_AVAILABLE_ERROR_CODES = frozenset({1205, 3572})
+
+
+def _is_lock_not_available(error: OperationalError) -> bool:
+    args = getattr(error.orig, "args", ())
+    return bool(args) and args[0] in LOCK_NOT_AVAILABLE_ERROR_CODES
+
 
 class ChatService:
     def __init__(self, db: DBSession) -> None:
         self.db = db
 
-    def _get_owned_chat(self, chat_id: UUID, user_id: UUID) -> Chat:
+    def _lock_chat(self, chat: Chat) -> None:
+        """채팅방 행을 NOWAIT로 잠가 같은 방의 동시 처리를 막는다.
+
+        이미 다른 요청이 잠갔다면 기다리지 않고 ChatBusyError(409)를 발생시킨다.
+        잠금은 commit 또는 롤백(세션 종료) 시 자동으로 해제된다.
+        """
+        try:
+            self.db.refresh(chat, with_for_update={"nowait": True})
+        except OperationalError as exc:
+            if _is_lock_not_available(exc):
+                raise ChatBusyError() from exc
+            raise  # 잠금 실패가 아닌 다른 DB 오류는 그대로 상위로 전달
+
+    def _get_owned_chat(
+        self, chat_id: UUID, user_id: UUID, *, lock: bool = False
+    ) -> Chat:
         chat = self.db.get(Chat, chat_id)
         if chat is None or chat.deleted_at is not None or chat.user_id != user_id:
             raise ChatNotFoundError()
+
+        # 소유권을 먼저 확인한 뒤에 잠가서, 타인의 요청이 남의 채팅방 잠금에 영향을 주지 않게 한다.
+        if lock:
+            self._lock_chat(chat)
+            if chat.deleted_at is not None:
+                raise ChatNotFoundError()
         return chat
 
     def _get_active_philosopher(self, philosopher_id: int) -> Philosopher:
@@ -174,8 +205,8 @@ class ChatService:
         request: SendMessageRequest,
         user_id: UUID,
     ) -> SendMessageResponse:
-        # 1. 채팅방 조회 및 소유권 확인
-        chat = self._get_owned_chat(chat_id, user_id)
+        # 1. 채팅방 조회, 소유권 확인 및 잠금 (같은 방의 동시 전송은 409)
+        chat = self._get_owned_chat(chat_id, user_id, lock=True)
 
         # 2. 대화할 철학자 조회 및 활성화 여부 확인
         philosopher = self._get_active_philosopher(request.philosopher_id)
@@ -226,7 +257,7 @@ class ChatService:
         chat_id: UUID,
         user_id: UUID,
     ) -> None:
-        chat = self._get_owned_chat(chat_id, user_id)
+        chat = self._get_owned_chat(chat_id, user_id, lock=True)
         chat.deleted_at = utc_now()
         self.db.commit()
 

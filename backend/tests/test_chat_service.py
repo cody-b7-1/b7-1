@@ -3,11 +3,17 @@ import unittest
 from types import SimpleNamespace
 from uuid import uuid4
 
+from sqlalchemy.exc import OperationalError
+
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
 import app.db.model_registry  # noqa: F401  (모든 ORM 매퍼 등록)
 from app.chats.enums import SenderRole
-from app.chats.exceptions import ChatNotFoundError, PhilosopherNotFoundError
+from app.chats.exceptions import (
+    ChatBusyError,
+    ChatNotFoundError,
+    PhilosopherNotFoundError,
+)
 from app.chats.models.chat import Chat
 from app.chats.schemas import SendMessageRequest, StartChatRequest
 from app.chats.service import ChatService
@@ -22,12 +28,20 @@ class FakeSession:
         self.objects = objects or {}
         self.added: list = []
         self.commit_calls = 0
+        self.refresh_error: Exception | None = None
+        self.locked: list = []
 
     def get(self, model, key):
         return self.objects.get((model, key))
 
     def add_all(self, items) -> None:
         self.added.extend(items)
+
+    def refresh(self, instance, with_for_update=None) -> None:
+        if self.refresh_error is not None:
+            raise self.refresh_error
+        if with_for_update:
+            self.locked.append(instance)
 
     def commit(self) -> None:
         self.commit_calls += 1
@@ -151,6 +165,55 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(self.db.commit_calls, 1)
         with self.assertRaises(ChatNotFoundError):
             self.service.delete_chat(chat.chat_id, self.user_id)
+
+    def test_send_message_locks_chat_before_processing(self) -> None:
+        chat = make_chat(self.user_id, philosopher_id=1)
+        self._register_chat(chat)
+        request = SendMessageRequest(prompt="계속", philosopher_id=1)
+
+        self.service.send_message(chat.chat_id, request, self.user_id)
+
+        self.assertEqual(self.db.locked, [chat])
+
+    def test_send_message_and_delete_fail_fast_when_chat_is_busy(self) -> None:
+        chat = make_chat(self.user_id, philosopher_id=1)
+        self._register_chat(chat)
+        # MariaDB는 NOWAIT 잠금 충돌 시 1205 에러를 즉시 반환한다.
+        self.db.refresh_error = OperationalError(
+            "SELECT ... FOR UPDATE NOWAIT",
+            {},
+            Exception(1205, "Lock wait timeout exceeded"),
+        )
+        request = SendMessageRequest(prompt="동시 질문", philosopher_id=1)
+
+        with self.assertRaises(ChatBusyError):
+            self.service.send_message(chat.chat_id, request, self.user_id)
+        with self.assertRaises(ChatBusyError):
+            self.service.delete_chat(chat.chat_id, self.user_id)
+
+        self.assertEqual(self.db.commit_calls, 0)
+        self.assertIsNone(chat.deleted_at)
+
+    def test_unrelated_database_errors_are_not_reported_as_busy(self) -> None:
+        chat = make_chat(self.user_id, philosopher_id=1)
+        self._register_chat(chat)
+        self.db.refresh_error = OperationalError(
+            "SELECT ...", {}, Exception(2013, "Lost connection to server")
+        )
+        request = SendMessageRequest(prompt="질문", philosopher_id=1)
+
+        with self.assertRaises(OperationalError):
+            self.service.send_message(chat.chat_id, request, self.user_id)
+
+    def test_other_users_chat_is_rejected_before_locking(self) -> None:
+        other_users_chat = make_chat(uuid4(), philosopher_id=1)
+        self._register_chat(other_users_chat)
+        request = SendMessageRequest(prompt="침입", philosopher_id=1)
+
+        with self.assertRaises(ChatNotFoundError):
+            self.service.send_message(other_users_chat.chat_id, request, self.user_id)
+
+        self.assertEqual(self.db.locked, [])
 
 
 if __name__ == "__main__":

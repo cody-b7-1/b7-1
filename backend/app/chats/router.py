@@ -63,6 +63,9 @@ def start_chat(
         status.HTTP_404_NOT_FOUND: {
             "description": "채팅방을 찾을 수 없거나, 요청한 철학자를 찾을 수 없습니다.",
         },
+        status.HTTP_409_CONFLICT: {
+            "description": "같은 채팅방에서 이전 질문의 답변을 생성하는 중입니다.",
+        },
         status.HTTP_503_SERVICE_UNAVAILABLE: {
             "description": "철학자 AI와의 연결이 일시적으로 원활하지 않습니다.",
         },
@@ -117,6 +120,9 @@ def list_chats(
     responses={
         status.HTTP_404_NOT_FOUND: {
             "description": "해당 채팅방을 찾을 수 없습니다.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "같은 채팅방에서 이전 질문의 답변을 생성하는 중입니다.",
         },
     },
 )
