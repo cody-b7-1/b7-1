@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import UUID4, Field
 
+from app.chats.enums import SenderRole
 from app.core.schemas import CamelModel, CamelResponseModel
 
 # --- 공통 재사용 필드 타입 정의 ---
@@ -32,45 +33,47 @@ PhilosopherIdField = Annotated[
     ),
 ]
 
+PromptField = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=1000,
+        description="사용자 입력 프롬프트",
+        examples=["진정한 행복이란 무엇인가요?"],
+    ),
+]
+
+AnswerField = Annotated[
+    str,
+    Field(
+        description="철학자 답변",
+        examples=["행복은 덕에 따르는 영혼의 활동입니다."],
+    ),
+]
+
 
 # --- start_chat (POST /chats) ---
 class StartChatRequest(CamelModel):
-    prompt: str = Field(
-        min_length=1,
-        max_length=1000,
-        description="채팅 시작 프롬프트",
-        examples=["진정한 행복이란 무엇인가요?"],
-    )
+    prompt: PromptField
     philosopher_id: PhilosopherIdField
 
 
 class StartChatResponse(CamelResponseModel):
     chat_id: ChatIdField
     chat_title: ChatTitleField
-    answer: str = Field(
-        description="채팅 시작 답변",
-        examples=["행복은 덕에 따르는 영혼의 활동입니다."],
-    )
+    answer: AnswerField
     philosopher_id: PhilosopherIdField
 
 
 # --- send_message (POST /chats/{chat_id}/messages) ---
 class SendMessageRequest(CamelModel):
-    prompt: str = Field(
-        min_length=1,
-        max_length=1000,
-        description="사용자 메시지 내용",
-        examples=["그렇다면 덕은 어떻게 기를 수 있나요?"],
-    )
+    prompt: PromptField
     philosopher_id: PhilosopherIdField
 
 
 class SendMessageResponse(CamelResponseModel):
     chat_id: ChatIdField
-    answer: str = Field(
-        description="철학자 답변",
-        examples=["지성적 덕은 가르침을 통해, 도덕적 덕은 습관을 통해 길러집니다."],
-    )
+    answer: AnswerField
     philosopher_id: PhilosopherIdField
 
 
@@ -83,10 +86,15 @@ class ChatListItem(CamelResponseModel):
 
 class ChatListResponse(CamelResponseModel):
     items: list[ChatListItem] = Field(description="채팅방 목록")
-    total: int = Field(ge=0, description="전체 채팅방 수", examples=[42])
-    limit: int = Field(ge=1, description="요청한 limit", examples=[20])
-    offset: int = Field(ge=0, description="요청한 offset", examples=[0])
-    has_more: bool = Field(description="다음 데이터 존재 여부")
+    has_more: bool = Field(
+        description="다음 데이터 존재 여부",
+        examples=[True],
+    )
+    next_cursor: UUID4 | None = Field(
+        default=None,
+        description="다음 대화 목록을 조회할 때 cursor 파라미터로 넘길 채팅방 ID",
+        examples=["00000000-0000-4000-8000-000000000001"],
+    )
 
 
 # --- get_chat (GET /chats/{chat_id}) ---
@@ -95,9 +103,9 @@ class MessageItem(CamelResponseModel):
         description="메시지 ID",
         examples=["00000000-0000-4000-8000-000000000010"],
     )
-    sender_role: Literal["USER", "PHILOSOPHER", "SYSTEM"] = Field(
+    sender_role: SenderRole = Field(
         description="메시지 발신자 역할 (USER | PHILOSOPHER | SYSTEM)",
-        examples=["PHILOSOPHER"],
+        examples=[SenderRole.PHILOSOPHER],
     )
     philosopher_id: int | None = Field(
         default=None,
@@ -128,7 +136,7 @@ class GetChatResponse(CamelResponseModel):
     )
     next_cursor: UUID4 | None = Field(
         default=None,
-        description="더 오래된 메시지를 조회할 때 before 파라미터로 넘길 메시지 ID",
+        description="더 오래된 메시지를 조회할 때 cursor 파라미터로 넘길 메시지 ID",
         examples=["00000000-0000-4000-8000-000000000010"],
     )
     created_at: datetime = Field(

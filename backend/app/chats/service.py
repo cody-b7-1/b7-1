@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from pydantic import UUID4
 from sqlalchemy import select
 
+from app.chats.enums import SenderRole
 from app.chats.models.chat import Chat
 from app.chats.models.message import Message
 from app.chats.schemas import (
@@ -55,7 +56,7 @@ class ChatService:
             message_id=uuid4(),
             chat_id=chat.chat_id,
             philosopher_id=None,
-            sender_role="USER",
+            sender_role=SenderRole.USER,
             content=request.prompt,
         )
 
@@ -65,7 +66,7 @@ class ChatService:
             message_id=uuid4(),
             chat_id=chat.chat_id,
             philosopher_id=philosopher.philosopher_id,
-            sender_role="PHILOSOPHER",
+            sender_role=SenderRole.PHILOSOPHER,
             content=answer,
             is_success=True,
         )
@@ -85,21 +86,41 @@ class ChatService:
     def list_chats(
         self,
         limit: int = 20,
-        offset: int = 0,
+        cursor: UUID4 | None = None,
         user_id: UUID4 | None = None,
     ) -> ChatListResponse:
         target_user_id = user_id or UUID(
             "00000000-0000-4000-8000-000000000001"
         )  # TODO: 인증(Auth) 연동 후 실제 로그인 유저의 user_id 사용
 
-        stmt = (
-            select(Chat)
-            .where(Chat.user_id == target_user_id, Chat.deleted_at.is_(None))
-            .order_by(Chat.updated_at.desc())
+        stmt = select(Chat).where(
+            Chat.user_id == target_user_id,
+            Chat.deleted_at.is_(None),
         )
-        all_chats = self.db.scalars(stmt).all()
-        total = len(all_chats)
-        paged_chats = all_chats[offset : offset + limit]
+
+        if cursor is not None:
+            cursor_chat = self.db.get(Chat, cursor)
+            if cursor_chat is None or cursor_chat.deleted_at is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="기준 채팅방을 찾을 수 없습니다.",
+                )
+            stmt = stmt.where(
+                (Chat.updated_at < cursor_chat.updated_at)
+                | (
+                    (Chat.updated_at == cursor_chat.updated_at)
+                    & (Chat.chat_id < cursor_chat.chat_id)
+                )
+            )
+
+        rows = self.db.scalars(
+            stmt.order_by(
+                Chat.updated_at.desc(), Chat.chat_id.desc()
+            ).limit(limit + 1)
+        ).all()
+        has_more = len(rows) > limit
+        paged_chats = rows[:limit]
+        next_cursor = paged_chats[-1].chat_id if has_more else None
 
         return ChatListResponse(
             items=[
@@ -110,10 +131,8 @@ class ChatService:
                 )
                 for chat in paged_chats
             ],
-            total=total,
-            limit=limit,
-            offset=offset,
-            has_more=offset + len(paged_chats) < total,
+            has_more=has_more,
+            next_cursor=next_cursor,
         )
 
     def delete_chat(self, chat_id: UUID4) -> None:
@@ -123,7 +142,7 @@ class ChatService:
         self,
         chat_id: UUID4,
         limit: int = 30,
-        before: UUID4 | None = None,
+        cursor: UUID4 | None = None,
     ) -> GetChatResponse:
         chat = self.db.get(Chat, chat_id)
         if chat is None or chat.deleted_at is not None:
@@ -134,9 +153,9 @@ class ChatService:
 
         stmt = select(Message).where(Message.chat_id == chat_id)
 
-        # before 커서가 있으면 해당 메시지의 생성 시각 이전 데이터만 필터링
-        if before is not None:
-            cursor_msg = self.db.get(Message, before)
+        # cursor가 있으면 해당 메시지의 생성 시각 이전 데이터만 필터링
+        if cursor is not None:
+            cursor_msg = self.db.get(Message, cursor)
             if cursor_msg is None or cursor_msg.chat_id != chat_id:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -151,13 +170,11 @@ class ChatService:
             )
 
         # 최신순으로 limit + 1개를 가져와 다음 페이지(has_more) 여부 판단
-        rows = list(
-            self.db.scalars(
-                stmt.order_by(Message.created_at.desc(), Message.message_id.desc()).limit(
-                    limit + 1
-                )
-            ).all()
-        )
+        rows = self.db.scalars(
+            stmt.order_by(Message.created_at.desc(), Message.message_id.desc()).limit(
+                limit + 1
+            )
+        ).all()
         has_more = len(rows) > limit
         rows = rows[:limit]
         next_cursor = rows[-1].message_id if has_more else None

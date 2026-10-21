@@ -18,6 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.chats.enums import SenderRole
 from app.db.base import Base
 from app.db.mixins import CreatedAtMixin
 
@@ -37,7 +38,7 @@ class Message(CreatedAtMixin, Base):
     philosopher_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("philosophers.philosopher_id"), nullable=True
     )
-    sender_role: Mapped[str] = mapped_column(String(20), nullable=False)
+    sender_role: Mapped[SenderRole] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_success: Mapped[bool | None] = mapped_column(
