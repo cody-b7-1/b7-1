@@ -176,11 +176,8 @@ class ChatService:
             )
         ).all()
         has_more = len(rows) > limit
-        rows = rows[:limit]
-        next_cursor = rows[-1].message_id if has_more else None
-
-        # 화면에 보여줄 때는 시간 오름차순(과거 -> 최신)으로 뒤집어서 전달
-        rows.reverse()
+        paged_messages = rows[:limit]
+        next_cursor = paged_messages[-1].message_id if has_more else None
 
         return GetChatResponse(
             chat_id=chat.chat_id,
@@ -194,7 +191,7 @@ class ChatService:
                     content=m.content,
                     created_at=m.created_at,
                 )
-                for m in rows
+                for m in reversed(paged_messages)
             ],
             has_more=has_more,
             next_cursor=next_cursor,

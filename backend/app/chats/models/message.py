@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     UUID as SAUUID,
@@ -31,7 +31,9 @@ class Message(CreatedAtMixin, Base):
     __tablename__ = "messages"
     __table_args__ = (Index("ix_messages_philosopher_id", "philosopher_id"),)
 
-    message_id: Mapped[UUID] = mapped_column(SAUUID(as_uuid=True), primary_key=True)
+    message_id: Mapped[UUID] = mapped_column(
+        SAUUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     chat_id: Mapped[UUID] = mapped_column(
         SAUUID(as_uuid=True), ForeignKey("chats.chat_id"), nullable=False
     )
