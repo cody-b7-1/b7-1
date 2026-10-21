@@ -9,10 +9,7 @@ os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
 from app.auth.router import login, logout
 from app.auth.schemas import LoginRequest
-from app.auth.security import (
-    create_refresh_token,
-    verify_refresh_token,
-)
+from app.auth.security import create_refresh_token, verify_refresh_token
 from app.auth.service import EmailNotFoundError, PasswordMismatchError
 
 
@@ -81,16 +78,17 @@ class AuthRouterTests(unittest.TestCase):
     def test_logout_revokes_refresh_token_and_expires_cookies(self) -> None:
         response = Response()
         db = Mock()
+        refresh_token = create_refresh_token(uuid4())
 
         with patch("app.auth.router.revoke_refresh_token") as revoke:
             result = logout(
                 response=response,
                 db=db,
-                refresh_token="refresh-token",
+                refresh_token=refresh_token,
             )
 
         self.assertIsNone(result)
-        revoke.assert_called_once_with(db, "refresh-token")
+        revoke.assert_called_once_with(db, refresh_token)
         cookies = response.headers.getlist("set-cookie")
         self.assertEqual(len(cookies), 2)
         self.assertTrue(any(cookie.startswith("accessToken=") for cookie in cookies))
@@ -100,7 +98,24 @@ class AuthRouterTests(unittest.TestCase):
         response = Response()
 
         with patch("app.auth.router.revoke_refresh_token") as revoke:
-            logout(response=response, db=Mock(), refresh_token=None)
+            logout(
+                response=response,
+                db=Mock(),
+                refresh_token=None,
+            )
+
+        revoke.assert_not_called()
+        self.assertEqual(len(response.headers.getlist("set-cookie")), 2)
+
+    def test_logout_with_invalid_refresh_token_skips_db_revocation(self) -> None:
+        response = Response()
+
+        with patch("app.auth.router.revoke_refresh_token") as revoke:
+            logout(
+                response=response,
+                db=Mock(),
+                refresh_token=None,
+            )
 
         revoke.assert_not_called()
         self.assertEqual(len(response.headers.getlist("set-cookie")), 2)

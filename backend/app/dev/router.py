@@ -11,7 +11,6 @@ from app.auth.models.user import Role, User
 from app.auth.security import create_access_token
 from app.auth.service import issue_refresh_token
 
-# Ensure relationship targets are registered before a User instance is mapped.
 from app.db.session import get_db
 
 DEV_USER_EMAIL = "dev@example.com"

@@ -1,10 +1,14 @@
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import CurrentUser
+from app.auth.dependencies import (
+    CurrentUser,
+    get_optional_refresh_token,
+    get_refresh_token,
+)
 from app.auth.schemas import (
     CurrentUserResponse,
     EmailSendRequest,
@@ -45,7 +49,6 @@ router = APIRouter(prefix="/auth", tags=["인증"])
 def get_me(
     current_user: CurrentUser,
 ) -> CurrentUserResponse:
-    """Return the authenticated user's public profile."""
     return CurrentUserResponse(
         email=current_user.email,
         nickname=current_user.nickname,
@@ -83,7 +86,6 @@ def sign_up(
     request: SignUpRequest,
     db: Annotated[Session, Depends(get_db)],
 ) -> SignUpResponse:
-    """Create a new user account."""
     try:
         user = create_user(db, request)
     except EmailAlreadyRegisteredError:
@@ -136,7 +138,6 @@ def login(
     response: Response,
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
-    """Authenticate a user and set access and refresh token cookies."""
     try:
         access_token, refresh_token = login_user(db, request)
     except (EmailNotFoundError, PasswordMismatchError):
@@ -199,9 +200,6 @@ def login(
     },
 )
 def send_email_verification_link(request: EmailSendRequest) -> None:
-    """Declare the email-link sending contract; sending behavior is not implemented yet."""
-
-    # Account lookup, rate limiting, token generation, and email delivery are deferred.
     return
 
 
@@ -231,9 +229,6 @@ def send_email_verification_link(request: EmailSendRequest) -> None:
     },
 )
 def verify_email_link_token(request: EmailVerifyRequest) -> None:
-    """Declare the email-token verification contract; verification is not implemented yet."""
-
-    # Token lookup, expiration checks, one-time-use handling, and account updates are deferred.
     return
 
 
@@ -282,11 +277,9 @@ def verify_email_link_token(request: EmailVerifyRequest) -> None:
         },
     },
 )
-def refresh_access_token() -> None:
-    """Declare the token-refresh contract; refresh behavior is not implemented yet."""
-
-    # Cookie validation, token rotation, JWT issuance, and CSRF/Origin checks are deferred.
-    # On success, accessToken and refreshToken will be issued as cookies.
+def refresh_access_token(
+    refresh_token: Annotated[str, Depends(get_refresh_token)],
+) -> None:
     return
 
 
@@ -326,10 +319,8 @@ def refresh_access_token() -> None:
 def logout(
     response: Response,
     db: Annotated[Session, Depends(get_db)],
-    refresh_token: str | None = Cookie(default=None, alias="refreshToken"),
+    refresh_token: Annotated[str | None, Depends(get_optional_refresh_token)],
 ) -> None:
-    """Revoke the refresh token when present and expire authentication cookies."""
-
     # Origin/CSRF 검증(403)과 요청 횟수 제한(429)은 아직 구현되지 않았습니다.
 
     # refresh 토큰 삭제
