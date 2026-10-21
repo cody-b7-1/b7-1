@@ -135,7 +135,7 @@ def sign_up(
 def login(
     request: LoginRequest,
     response: Response,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ) -> None:
     """Authenticate a user and set access and refresh token cookies."""
     try:
@@ -325,8 +325,8 @@ def refresh_access_token() -> None:
 )
 def logout(
     response: Response,
+    db: Annotated[Session, Depends(get_db)],
     refresh_token: str | None = Cookie(default=None, alias="refreshToken"),
-    db: Session = Depends(get_db),
 ) -> None:
     """Revoke the refresh token when present and expire authentication cookies."""
 

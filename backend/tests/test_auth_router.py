@@ -83,7 +83,11 @@ class AuthRouterTests(unittest.TestCase):
         db = Mock()
 
         with patch("app.auth.router.revoke_refresh_token") as revoke:
-            result = logout(response, "refresh-token", db)
+            result = logout(
+                response=response,
+                db=db,
+                refresh_token="refresh-token",
+            )
 
         self.assertIsNone(result)
         revoke.assert_called_once_with(db, "refresh-token")
@@ -96,7 +100,7 @@ class AuthRouterTests(unittest.TestCase):
         response = Response()
 
         with patch("app.auth.router.revoke_refresh_token") as revoke:
-            logout(response, None, Mock())
+            logout(response=response, db=Mock(), refresh_token=None)
 
         revoke.assert_not_called()
         self.assertEqual(len(response.headers.getlist("set-cookie")), 2)
