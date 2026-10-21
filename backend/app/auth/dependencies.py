@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.auth.models.user import User
 from app.auth.security import (
+    RefreshTokenPayload,
     verify_access_token,
     verify_refresh_token,
 )
@@ -56,29 +57,31 @@ def get_current_user(
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
+VerifiedRefreshToken = tuple[RefreshTokenPayload, str]
+
 
 # logout 용
 def get_optional_refresh_token(
     refresh_token: Annotated[str | None, Cookie(alias="refreshToken")] = None,
-) -> str | None:
+) -> VerifiedRefreshToken | None:
     if refresh_token is None:
         return None
 
     try:
-        verify_refresh_token(refresh_token)
+        payload = verify_refresh_token(refresh_token)
     except InvalidTokenError:  # 204로 반환
         return None
 
-    return refresh_token
+    return payload, refresh_token
 
 
 # refresh api용
-def get_refresh_token(
+def get_required_refresh_token(
     refresh_token: Annotated[
-        str | None,
+        VerifiedRefreshToken | None,
         Depends(get_optional_refresh_token),
     ],
-) -> str:
+) -> VerifiedRefreshToken:
     if refresh_token is None:  # jti 등의 누락 시 401
         raise _refresh_unauthorized()
 
