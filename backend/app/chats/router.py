@@ -40,6 +40,9 @@ ChatIdPath = Annotated[
         status.HTTP_404_NOT_FOUND: {
             "description": "요청한 철학자를 찾을 수 없거나 비활성화 상태입니다.",
         },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "철학자 AI와의 연결이 일시적으로 원활하지 않습니다.",
+        },
     },
 )
 def start_chat(
@@ -59,6 +62,9 @@ def start_chat(
     responses={
         status.HTTP_404_NOT_FOUND: {
             "description": "채팅방을 찾을 수 없거나, 요청한 철학자를 찾을 수 없습니다.",
+        },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "철학자 AI와의 연결이 일시적으로 원활하지 않습니다.",
         },
     },
 )

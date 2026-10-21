@@ -16,6 +16,7 @@ from app.chats.schemas import (
     StartChatRequest,
     StartChatResponse,
 )
+from app.db.mixins import utc_now
 from app.db.session import DBSession
 from app.philosophers.models.philosopher import Philosopher
 
@@ -42,6 +43,43 @@ class ChatService:
             )
         return philosopher
 
+    def _create_dialogue_turn(
+        self,
+        chat_id: UUID,
+        prompt: str,
+        philosopher: Philosopher,
+    ) -> tuple[Message, Message]:
+        # 1. 철학자 AI 답변 생성 (TODO: 실제 LLM API 호출로 교체, 실패 시 503 에러 발생으로 DB 롤백 보호)
+        try:
+            # answer = self._call_llm(prompt, philosopher)
+            answer = f"{philosopher.name}의 답변입니다."
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="철학자 AI와의 연결이 일시적으로 원활하지 않습니다. 잠시 후 다시 시도해주세요.",
+            ) from exc
+
+        # 2. 사용자 질문 메시지 생성
+        user_message = Message(
+            message_id=uuid4(),
+            chat_id=chat_id,
+            philosopher_id=None,
+            sender_role=SenderRole.USER,
+            content=prompt,
+        )
+
+        # 3. 철학자 답변 메시지 생성 (성공한 완전한 답변만 생성)
+        assistant_message = Message(
+            message_id=uuid4(),
+            chat_id=chat_id,
+            philosopher_id=philosopher.philosopher_id,
+            sender_role=SenderRole.PHILOSOPHER,
+            content=answer,
+            is_success=True,
+        )
+
+        return user_message, assistant_message
+
     # POST /chats
     def start_chat(
         self,
@@ -51,9 +89,8 @@ class ChatService:
         # 1. 대화할 철학자 조회 및 활성화 여부 확인
         philosopher = self._get_active_philosopher(request.philosopher_id)
 
-        # 2. 채팅방(Chat) 생성 (첫 줄 기준 최대 80자, 추후 LLM 요약으로 고도화)
-        first_line = request.prompt.strip().splitlines()[0]
-        chat_title = first_line[:80]
+        # 2. 채팅방(Chat) 생성 (프롬프트 앞부분 최대 80자, 추후 LLM 요약으로 고도화)
+        chat_title = request.prompt[:80]
         chat = Chat(
             chat_id=uuid4(),
             user_id=user_id,
@@ -61,31 +98,18 @@ class ChatService:
             title=chat_title,
         )
 
-        # 3. 사용자 첫 질문 메시지 생성
-        user_message = Message(
-            message_id=uuid4(),
+        # 3. 사용자 질문 및 철학자 답변 메시지 생성 (한 턴)
+        user_message, assistant_message = self._create_dialogue_turn(
             chat_id=chat.chat_id,
-            philosopher_id=None,
-            sender_role=SenderRole.USER,
-            content=request.prompt,
+            prompt=request.prompt,
+            philosopher=philosopher,
         )
 
-        # 4. 철학자(AI) 첫 답변 생성 (TODO: LLM API 호출로 교체, llm 메시지 생성 여부 is_success로 저장)
-        answer = f"{philosopher.name}의 답변입니다."
-        assistant_message = Message(
-            message_id=uuid4(),
-            chat_id=chat.chat_id,
-            philosopher_id=philosopher.philosopher_id,
-            sender_role=SenderRole.PHILOSOPHER,
-            content=answer,
-            is_success=True,
-        )
-
-        # 5. DB 저장 (원자적 커밋)
+        # 4. DB 저장 (원자적 커밋)
         self.db.add_all([chat, user_message, assistant_message])
         self.db.commit()
 
-        # 6. 응답 스키마 반환
+        # 5. 응답 스키마 반환
         return StartChatResponse(
             chat_id=chat.chat_id,
             chat_title=chat.title,
@@ -161,7 +185,56 @@ class ChatService:
         request: SendMessageRequest,
         user_id: UUID,
     ) -> SendMessageResponse:
-        raise NotImplementedError
+        # 1. 채팅방 조회 및 소유권 확인
+        chat = self._get_owned_chat(chat_id, user_id)
+
+        # 2. 대화할 철학자 조회 및 활성화 여부 확인
+        philosopher = self._get_active_philosopher(request.philosopher_id)
+
+        # 3. 사용자 질문 및 철학자 답변 메시지 생성 (실패 시 여기서 503 발생 -> 메모리/DB 변경 없이 안전하게 중단)
+        user_message, assistant_message = self._create_dialogue_turn(
+            chat_id=chat.chat_id,
+            prompt=request.prompt,
+            philosopher=philosopher,
+        )
+
+        new_messages: list[Message] = []
+
+        # 4. LLM 성공 후, 철학자가 변경된 경우에만 시스템 메시지 추가 및 채팅방 업데이트
+        if chat.current_philosopher_id != philosopher.philosopher_id:
+            system_message = Message(
+                message_id=uuid4(),
+                chat_id=chat.chat_id,
+                philosopher_id=None,
+                sender_role=SenderRole.SYSTEM,
+                content=f"대화 상대가 {philosopher.name}(으)로 변경되었습니다.",
+            )
+            chat.current_philosopher_id = philosopher.philosopher_id
+            new_messages.append(system_message)
+
+        # 5. 시간 순서대로 메시지 배치 ([SYSTEM, USER, PHILOSOPHER])
+        new_messages.extend([user_message, assistant_message])
+
+        # 6. 채팅방 최신 활동 시각(updated_at) 갱신
+        chat.updated_at = utc_now()
+
+        # 7. DB 저장 (원자적 커밋)
+        self.db.add_all([chat, *new_messages])
+        self.db.commit()
+
+        # 8. 응답 스키마 반환
+        return SendMessageResponse(
+            messages=[
+                MessageItem(
+                    message_id=message.message_id,
+                    sender_role=message.sender_role,
+                    philosopher_id=message.philosopher_id,
+                    content=message.content,
+                    created_at=message.created_at,
+                )
+                for message in new_messages
+            ],
+        )
 
     # DELETE /chats/{chat_id}
     def delete_chat(
