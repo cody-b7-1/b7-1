@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
@@ -12,7 +13,7 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import CurrentUser
 from app.auth.email import deliver_email_verification_email
 from app.auth.models.user import User
 from app.auth.schemas import (
@@ -55,7 +56,9 @@ router = APIRouter(prefix="/auth", tags=["인증"])
         },
     },
 )
-def get_me(current_user: User = Depends(get_current_user)) -> CurrentUserResponse:
+def get_me(
+    current_user: CurrentUser,
+) -> CurrentUserResponse:
     """Return the authenticated user's public profile."""
     return CurrentUserResponse(
         email=current_user.email,
@@ -93,7 +96,7 @@ def get_me(current_user: User = Depends(get_current_user)) -> CurrentUserRespons
 def sign_up(
     request: SignUpRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ) -> SignUpResponse:
     """Create a new user account."""
     try:
@@ -148,7 +151,7 @@ def sign_up(
 def login(
     request: LoginRequest,
     response: Response,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ) -> None:
     """Authenticate a user and set access and refresh token cookies."""
     try:
@@ -336,7 +339,8 @@ def refresh_access_token() -> None:
     description=(
         "accessToken 및 refreshToken 쿠키를 모두 만료 처리합니다. 쿠키가 없거나 만료되어도 "
         "204를 반환하며, 서로 다른 origin인 경우 프런트엔드 요청에는 credentials: 'include'가 필요합니다. "
-        "refreshToken이 있으면 서버에서도 무효화합니다."
+        "refreshToken이 있으면 서버에서도 무효화합니다. "
+        "403 Origin/CSRF 검증과 429 요청 횟수 제한은 아직 구현되지 않았습니다."
     ),
     responses={
         status.HTTP_204_NO_CONTENT: {
@@ -361,10 +365,12 @@ def refresh_access_token() -> None:
 )
 def logout(
     response: Response,
+    db: Annotated[Session, Depends(get_db)],
     refresh_token: str | None = Cookie(default=None, alias="refreshToken"),
-    db: Session = Depends(get_db),
 ) -> None:
     """Revoke the refresh token when present and expire authentication cookies."""
+
+    # Origin/CSRF 검증(403)과 요청 횟수 제한(429)은 아직 구현되지 않았습니다.
 
     # refresh 토큰 삭제
     if refresh_token is not None:
