@@ -25,7 +25,7 @@ class CurrentUserDependencyTests(unittest.TestCase):
         db = FakeSession(user)
         access_token = create_access_token(uuid4())
 
-        self.assertIs(get_current_user(access_token, db), user)
+        self.assertIs(get_current_user(db, access_token), user)
         self.assertEqual(db.scalar_calls, 1)
 
     def test_rejects_missing_or_invalid_token(self) -> None:
@@ -35,7 +35,7 @@ class CurrentUserDependencyTests(unittest.TestCase):
             create_refresh_token(uuid4()),
         ):
             with self.assertRaises(HTTPException) as error:
-                get_current_user(access_token, FakeSession())
+                get_current_user(FakeSession(), access_token)
 
             self.assertEqual(error.exception.status_code, 401)
             self.assertIsNone(error.exception.headers)
@@ -44,7 +44,7 @@ class CurrentUserDependencyTests(unittest.TestCase):
         access_token = create_access_token(uuid4())
 
         with self.assertRaises(HTTPException) as error:
-            get_current_user(access_token, FakeSession())
+            get_current_user(FakeSession(), access_token)
 
         self.assertEqual(error.exception.status_code, 401)
 

@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
@@ -31,7 +33,9 @@ router = APIRouter(prefix="/auth", tags=["인증"])
         },
     },
 )
-def get_me(current_user: User = Depends(get_current_user)) -> CurrentUserResponse:
+def get_me(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> CurrentUserResponse:
     """Return the authenticated user's public profile."""
     return CurrentUserResponse(
         email=current_user.email,
@@ -68,7 +72,7 @@ def get_me(current_user: User = Depends(get_current_user)) -> CurrentUserRespons
 )
 def sign_up(
     request: SignUpRequest,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ) -> SignUpResponse:
     """Create a new user account."""
     try:
