@@ -1,11 +1,16 @@
 import logging
 import re
 import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from app.core.config import settings
 
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s - %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+LOG_FILE_PATH = Path("logs/app.log")
+MAX_LOG_FILE_SIZE = 10 * 1024 * 1024
+LOG_BACKUP_COUNT = 4
 _LOG_LEVELS = {
     "local": logging.DEBUG,
     "test": logging.WARNING,
@@ -73,32 +78,49 @@ class RedactingFormatter(logging.Formatter):
         return _redact(super().format(record))
 
 
-def _create_handler() -> logging.Handler:
+def _create_console_handler() -> logging.Handler:
     formatter = RedactingFormatter(LOG_FORMAT, datefmt=DATE_FORMAT)
 
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
-    setattr(console_handler, _HANDLER_MARKER, True)
+    setattr(console_handler, _HANDLER_MARKER, "console")
     return console_handler
+
+
+def _create_file_handler() -> logging.Handler:
+    LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        LOG_FILE_PATH,
+        maxBytes=MAX_LOG_FILE_SIZE,
+        backupCount=LOG_BACKUP_COUNT,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(RedactingFormatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    setattr(file_handler, _HANDLER_MARKER, "file")
+    return file_handler
 
 
 def setup_logging() -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(_LOG_LEVELS[settings.app_env])
 
-    managed_handlers = [
-        handler
-        for handler in root_logger.handlers
-        if getattr(handler, _HANDLER_MARKER, False)
-    ]
-    for handler in root_logger.handlers:
-        if handler not in managed_handlers and not isinstance(
+    managed_handlers: dict[str, logging.Handler] = {}
+    for handler in root_logger.handlers[:]:
+        handler_kind = getattr(handler, _HANDLER_MARKER, None)
+        if handler_kind in ("console", "file") and handler_kind not in managed_handlers:
+            managed_handlers[handler_kind] = handler
+        elif handler_kind:
+            root_logger.removeHandler(handler)
+            handler.close()
+        elif not isinstance(
             handler.formatter, RedactingFormatter
         ):
             handler.setFormatter(RedactingFormatter(base_formatter=handler.formatter))
 
-    if not managed_handlers:
-        root_logger.addHandler(_create_handler())
+    if "console" not in managed_handlers:
+        root_logger.addHandler(_create_console_handler())
+    if "file" not in managed_handlers:
+        root_logger.addHandler(_create_file_handler())
 
     # Uvicorn 로그를 루트 Handler로 전달해 Access Log는 유지하고 콘솔 중복은 막는다.
     for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):

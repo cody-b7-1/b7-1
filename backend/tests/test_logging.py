@@ -1,6 +1,7 @@
 import io
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 
 import pytest
 
@@ -194,6 +195,20 @@ def test_formatter_applies_redaction_once(monkeypatch: pytest.MonkeyPatch) -> No
     assert len(calls) == 1
 
 
+def test_console_handler_writes_redacted_log(monkeypatch: pytest.MonkeyPatch) -> None:
+    output = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", output)
+    handler = app_logging._create_console_handler()
+    record = logging.LogRecord(
+        "console-test", logging.INFO, __file__, 1, "password=%s", ("secret",), None
+    )
+
+    handler.handle(record)
+
+    assert "password=[REDACTED]" in output.getvalue()
+    assert "secret" not in output.getvalue()
+
+
 @pytest.mark.parametrize(
     ("app_env", "expected_level"),
     [
@@ -203,7 +218,10 @@ def test_formatter_applies_redaction_once(monkeypatch: pytest.MonkeyPatch) -> No
     ],
 )
 def test_setup_logging_sets_level_and_does_not_duplicate_handler(
-    monkeypatch: pytest.MonkeyPatch, app_env: str, expected_level: int
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    app_env: str,
+    expected_level: int,
 ) -> None:
     root_logger = logging.getLogger()
     original_handlers = root_logger.handlers[:]
@@ -214,6 +232,7 @@ def test_setup_logging_sets_level_and_does_not_duplicate_handler(
         if not getattr(handler, app_logging._HANDLER_MARKER, False)
     ]
     monkeypatch.setattr(app_logging.settings, "app_env", app_env)
+    monkeypatch.setattr(app_logging, "LOG_FILE_PATH", tmp_path / "app.log")
 
     try:
         app_logging.setup_logging()
@@ -225,21 +244,34 @@ def test_setup_logging_sets_level_and_does_not_duplicate_handler(
         ]
 
         assert root_logger.level == expected_level
-        assert len(managed_handlers) == 1
-        assert isinstance(managed_handlers[0], logging.StreamHandler)
-        assert managed_handlers[0].stream is sys.stdout
-        assert managed_handlers[0].filters == []
+        assert len(managed_handlers) == 2
+        handlers_by_kind = {
+            getattr(handler, app_logging._HANDLER_MARKER): handler
+            for handler in managed_handlers
+        }
+        console_handler = handlers_by_kind["console"]
+        file_handler = handlers_by_kind["file"]
+        assert isinstance(console_handler, logging.StreamHandler)
+        assert console_handler.stream is sys.stdout
+        assert console_handler.filters == []
+        assert isinstance(file_handler, RotatingFileHandler)
+        assert file_handler.maxBytes == 10 * 1024 * 1024
+        assert file_handler.backupCount == 4
         for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
             uvicorn_logger = logging.getLogger(logger_name)
             assert uvicorn_logger.handlers == []
             assert uvicorn_logger.propagate is True
     finally:
+        for handler in root_logger.handlers[:]:
+            if handler not in original_handlers:
+                root_logger.removeHandler(handler)
+                handler.close()
         root_logger.handlers = original_handlers
         root_logger.setLevel(original_level)
 
 
 def test_setup_logging_preserves_and_redacts_unmanaged_root_handler(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     root_logger = logging.getLogger()
     original_handlers = root_logger.handlers[:]
@@ -249,6 +281,7 @@ def test_setup_logging_preserves_and_redacts_unmanaged_root_handler(
     unsafe_handler.setFormatter(logging.Formatter("%(message)s"))
     root_logger.handlers = [unsafe_handler]
     monkeypatch.setattr(app_logging.settings, "app_env", "local")
+    monkeypatch.setattr(app_logging, "LOG_FILE_PATH", tmp_path / "app.log")
 
     try:
         app_logging.setup_logging()
@@ -260,8 +293,52 @@ def test_setup_logging_preserves_and_redacts_unmanaged_root_handler(
 
         assert unsafe_output.getvalue() == "password=[REDACTED]\n"
     finally:
+        for handler in root_logger.handlers[:]:
+            if handler is not unsafe_handler:
+                root_logger.removeHandler(handler)
+                handler.close()
         root_logger.handlers = original_handlers
         root_logger.setLevel(original_level)
+
+
+def test_file_handler_rotates_and_redacts_sensitive_data(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    log_path = tmp_path / "logs" / "app.log"
+    monkeypatch.setattr(app_logging, "LOG_FILE_PATH", log_path)
+    monkeypatch.setattr(app_logging, "MAX_LOG_FILE_SIZE", 512)
+    monkeypatch.setattr(app_logging, "LOG_BACKUP_COUNT", 4)
+    handler = app_logging._create_file_handler()
+    logger = logging.getLogger("file-rotation-test")
+    original_handlers = logger.handlers[:]
+    original_level = logger.level
+    original_propagate = logger.propagate
+    logger.handlers = [handler]
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    try:
+        for index in range(30):
+            logger.info("entry=%s password=file-secret %s", index, "x" * 100)
+        try:
+            raise ValueError("api_key=traceback-secret")
+        except ValueError:
+            logger.exception("파일 예외")
+    finally:
+        handler.close()
+        logger.handlers = original_handlers
+        logger.setLevel(original_level)
+        logger.propagate = original_propagate
+
+    log_files = sorted(log_path.parent.glob("app.log*"))
+    output = "".join(path.read_text(encoding="utf-8") for path in log_files)
+
+    assert log_path.exists()
+    assert len(log_files) == 5
+    assert not (log_path.parent / "app.log.5").exists()
+    assert "file-secret" not in output
+    assert "traceback-secret" not in output
+    assert "[REDACTED]" in output
 
 
 def test_setup_logging_preserves_pytest_log_capture(
