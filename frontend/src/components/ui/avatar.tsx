@@ -69,7 +69,15 @@ function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
   )
 }
 
-function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
+function AvatarGroup({
+  className,
+  max,
+  children,
+  ...props
+}: React.ComponentProps<"div"> & {
+  /** 앞에서부터 max개만 보여 주고 나머지는 숨김 */
+  max?: number
+}) {
   return (
     <div
       data-slot="avatar-group"
@@ -78,7 +86,11 @@ function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
         className
       )}
       {...props}
-    />
+    >
+      {max === undefined
+        ? children
+        : React.Children.toArray(children).slice(0, max)}
+    </div>
   )
 }
 
