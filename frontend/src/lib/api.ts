@@ -143,7 +143,6 @@ export type Message = {
 export type StartChatResponse = {
   chatId: ChatId;
   chatTitle: string;
-  currentPhilosopherId: number;
   messages: Message[];
 };
 

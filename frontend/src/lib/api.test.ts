@@ -141,7 +141,7 @@ const message = {
 const messageBody = { philosopherId: 1, prompt: "안녕" };
 
 test("startChat: 201이면 StartChatResponse 반환", async () => {
-  const resp = { chatId: "c1", chatTitle: "title", currentPhilosopherId: 1, messages: [message] };
+  const resp = { chatId: "c1", chatTitle: "title", messages: [message] };
   const fetch = mockFetch(201, resp);
 
   expect(await startChat(messageBody)).toEqual(resp);
@@ -189,7 +189,7 @@ test("deleteChat: 204면 null", async () => {
   expect(sent(fetch)).toMatchObject({ url: "/api/chats/c1", method: "DELETE" });
 });
 
-test("getChat: 200이면 ChatDetailed 반환, cursor는 query string으로 전달", async () => {
+test("getChat: 200이면 ChatDetailed 반환, limit와 cursor는 query string으로 전달", async () => {
   const detailed = {
     chatId: "c1",
     chatTitle: "title",
@@ -202,8 +202,8 @@ test("getChat: 200이면 ChatDetailed 반환, cursor는 query string으로 전�
   };
   const fetch = mockFetch(200, detailed);
 
-  expect(await getChat("c1", { cursor: "abc" })).toEqual(detailed);
-  expect(sent(fetch)).toMatchObject({ url: "/api/chats/c1?cursor=abc", method: undefined });
+  expect(await getChat("c1", { limit: 15, cursor: "abc" })).toEqual(detailed);
+  expect(sent(fetch)).toMatchObject({ url: "/api/chats/c1?limit=15&cursor=abc", method: undefined });
 });
 
 test("getChat: 404면 ApiError", async () => {

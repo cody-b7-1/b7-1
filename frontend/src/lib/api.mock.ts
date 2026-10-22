@@ -124,7 +124,7 @@ const startChat = ({ prompt, philosopherId }: MessageBody): StartChatResponse =>
     updatedAt: now,
   };
   chats.unshift(chat);
-  return { chatId: chat.chatId, chatTitle: chat.chatTitle, currentPhilosopherId: philosopherId, messages };
+  return { chatId: chat.chatId, chatTitle: chat.chatTitle, messages };
 };
 
 const sendMessage = (chatId: string, { prompt, philosopherId }: MessageBody): SendMessageResponse => {
