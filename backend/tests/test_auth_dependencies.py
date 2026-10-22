@@ -1,12 +1,24 @@
 import os
 import unittest
+from datetime import timedelta
 from uuid import uuid4
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-from app.auth.dependencies import get_current_user
-from app.auth.security import create_access_token, create_refresh_token
+import jwt
+from app.auth.dependencies import (
+    get_current_user,
+    get_optional_refresh_token,
+    get_refresh_token,
+)
+from app.auth.security import (
+    create_access_token,
+    create_refresh_token,
+    verify_refresh_token,
+)
+from app.core.config import settings
 from fastapi import HTTPException
+from jwt.exceptions import InvalidTokenError
 
 
 class FakeSession:
@@ -47,6 +59,90 @@ class CurrentUserDependencyTests(unittest.TestCase):
             get_current_user(FakeSession(), access_token)
 
         self.assertEqual(error.exception.status_code, 401)
+
+
+class RefreshTokenDependencyTests(unittest.TestCase):
+    def test_returns_verified_original_refresh_token(self) -> None:
+        refresh_token = create_refresh_token(uuid4())
+
+        result = get_refresh_token(refresh_token)
+
+        self.assertEqual(result, refresh_token)
+
+    def test_rejects_missing_or_invalid_refresh_token(self) -> None:
+        for refresh_token in (
+            None,
+            "not-a-token",
+            create_access_token(uuid4()),
+            create_refresh_token(uuid4(), expires_delta=timedelta(seconds=-1)),
+        ):
+            with (
+                self.subTest(refresh_token=refresh_token),
+                self.assertRaises(HTTPException) as error,
+            ):
+                get_refresh_token(get_optional_refresh_token(refresh_token))
+
+            self.assertEqual(error.exception.status_code, 401)
+
+    def test_optional_token_returns_none_for_missing_or_invalid_token(self) -> None:
+        for refresh_token in (
+            None,
+            "not-a-token",
+            create_access_token(uuid4()),
+            create_refresh_token(uuid4(), expires_delta=timedelta(seconds=-1)),
+        ):
+            with self.subTest(refresh_token=refresh_token):
+                self.assertIsNone(get_optional_refresh_token(refresh_token))
+
+    def test_optional_token_returns_verified_original_refresh_token(self) -> None:
+        refresh_token = create_refresh_token(uuid4())
+
+        self.assertEqual(get_optional_refresh_token(refresh_token), refresh_token)
+
+    def test_refresh_token_requires_all_claims(self) -> None:
+        refresh_token = create_refresh_token(uuid4())
+        payload = jwt.decode(
+            refresh_token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+        )
+
+        for claim in ("sub", "iat", "exp", "type", "jti"):
+            invalid_payload = payload.copy()
+            invalid_payload.pop(claim)
+            invalid_token = jwt.encode(
+                invalid_payload,
+                settings.jwt_secret_key,
+                algorithm=settings.jwt_algorithm,
+            )
+
+            with (
+                self.subTest(claim=claim),
+                self.assertRaises(InvalidTokenError),
+            ):
+                verify_refresh_token(invalid_token)
+
+    def test_refresh_token_rejects_invalid_identifier_claims(self) -> None:
+        refresh_token = create_refresh_token(uuid4())
+        payload = jwt.decode(
+            refresh_token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+        )
+
+        for claim in ("sub", "jti"):
+            invalid_payload = payload | {claim: "not-a-uuid"}
+            invalid_token = jwt.encode(
+                invalid_payload,
+                settings.jwt_secret_key,
+                algorithm=settings.jwt_algorithm,
+            )
+
+            with (
+                self.subTest(claim=claim),
+                self.assertRaises(InvalidTokenError),
+            ):
+                verify_refresh_token(invalid_token)
 
 
 if __name__ == "__main__":

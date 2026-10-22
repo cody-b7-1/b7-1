@@ -59,7 +59,6 @@ class LoginRequest(BaseModel):
     password: Annotated[
         str,
         Field(
-            min_length=8,
             max_length=128,
             description="HTTPS로 전송하는 비밀번호입니다.",
             examples=["password123!"],

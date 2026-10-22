@@ -1,13 +1,34 @@
 import os
 import unittest
+from datetime import UTC, datetime
+from unittest.mock import Mock, patch
+from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-from app.auth.schemas import SignUpRequest
-from app.auth.security import verify_password
-from app.auth.service import EmailAlreadyRegisteredError, create_user
+from app.auth.models.refresh_token import RefreshToken
+from app.auth.models.user import Role, User
+from app.auth.schemas import LoginRequest, SignUpRequest
+from app.auth.security import (
+    hash_password,
+    hash_refresh_token,
+    verify_password,
+    verify_refresh_token,
+    verify_refresh_token_hash,
+)
+from app.auth.service import (
+    EmailAlreadyRegisteredError,
+    EmailNotFoundError,
+    EmailNotVerifiedError,
+    PasswordMismatchError,
+    authenticate_user,
+    create_user,
+    issue_refresh_token,
+    login_user,
+    revoke_refresh_token,
+)
 
 
 class FakeSession:
@@ -37,6 +58,18 @@ class FailingSession(FakeSession):
 
 
 class AuthServiceTests(unittest.TestCase):
+    def _login_user(self, *, verified: bool = True) -> User:
+        return User(
+            user_id=uuid4(),
+            email="user@example.com",
+            nickname="철학탐험가",
+            password_hash=hash_password("password123!"),
+            role=Role.USER,
+            email_verified_at=datetime.now(UTC).replace(tzinfo=None)
+            if verified
+            else None,
+        )
+
     def test_create_user_hashes_password_and_persists_user(self) -> None:
         db = FakeSession()
         request = SignUpRequest(
@@ -70,9 +103,7 @@ class AuthServiceTests(unittest.TestCase):
             password="password123!",
         )
 
-        with self.assertRaisesRegex(
-            EmailAlreadyRegisteredError, "이미 등록된 이메일 주소입니다."
-        ):
+        with self.assertRaises(EmailAlreadyRegisteredError):
             create_user(db, request)
 
         self.assertEqual(db.rollback_calls, 1)
@@ -91,6 +122,98 @@ class AuthServiceTests(unittest.TestCase):
 
         self.assertIs(raised.exception, error)
         self.assertEqual(db.rollback_calls, 1)
+
+    def test_issue_refresh_token_adds_hashed_token_record_with_matching_jti(
+        self,
+    ) -> None:
+        db = Mock()
+        user = self._login_user()
+
+        refresh_token = issue_refresh_token(db, user)
+
+        payload = verify_refresh_token(refresh_token)
+        db.add.assert_called_once()
+        db.commit.assert_called_once()
+        saved_token = db.add.call_args.args[0]
+        self.assertIsInstance(saved_token, RefreshToken)
+        self.assertEqual(str(saved_token.token_id), payload["jti"])
+        self.assertEqual(saved_token.user_id, user.user_id)
+        self.assertEqual(saved_token.token_hash, hash_refresh_token(refresh_token))
+        self.assertEqual(len(saved_token.token_hash), 64)
+        self.assertTrue(
+            verify_refresh_token_hash(refresh_token, saved_token.token_hash)
+        )
+
+    def test_revoke_refresh_token_marks_matching_sha256_record_revoked(self) -> None:
+        refresh_token = "refresh-token"
+        stored_token = RefreshToken(
+            token_id=uuid4(),
+            user_id=uuid4(),
+            token_hash=hash_refresh_token(refresh_token),
+            expires_at=datetime.now(UTC).replace(tzinfo=None),
+        )
+        db = Mock()
+        db.scalar.return_value = stored_token
+
+        revoke_refresh_token(db, refresh_token)
+
+        self.assertTrue(stored_token.is_revoked)
+        db.commit.assert_called_once_with()
+
+    def test_revoke_refresh_token_ignores_missing_record(self) -> None:
+        db = Mock()
+        db.scalar.return_value = None
+
+        revoke_refresh_token(db, "unknown-refresh-token")
+
+        db.commit.assert_not_called()
+
+    def test_login_user_combines_authentication_and_token_issuance(self) -> None:
+        db = Mock()
+        user = self._login_user()
+        request = LoginRequest(email="user@example.com", password="password123!")
+
+        with (
+            patch(
+                "app.auth.service.authenticate_user", return_value=user
+            ) as authenticate,
+            patch(
+                "app.auth.service.issue_refresh_token", return_value="refresh-token"
+            ) as issue,
+            patch(
+                "app.auth.service.create_access_token", return_value="access-token"
+            ) as access,
+        ):
+            tokens = login_user(db, request)
+
+        self.assertEqual(tokens, ("access-token", "refresh-token"))
+        authenticate.assert_called_once_with(db, request)
+        issue.assert_called_once_with(db, user)
+        access.assert_called_once_with(user.user_id)
+
+    def test_authenticate_user_rejects_unverified_account_separately(self) -> None:
+        db = Mock()
+        db.scalar.return_value = self._login_user(verified=False)
+        request = LoginRequest(email="user@example.com", password="password123!")
+
+        with self.assertRaises(EmailNotVerifiedError):
+            authenticate_user(db, request)
+
+    def test_authenticate_user_rejects_nonexistent_email(self) -> None:
+        db = Mock()
+        db.scalar.return_value = None
+        request = LoginRequest(email="missing@example.com", password="password123!")
+
+        with self.assertRaises(EmailNotFoundError):
+            authenticate_user(db, request)
+
+    def test_authenticate_user_rejects_mismatched_password(self) -> None:
+        db = Mock()
+        db.scalar.return_value = self._login_user()
+        request = LoginRequest(email="user@example.com", password="incorrect-password!")
+
+        with self.assertRaises(PasswordMismatchError):
+            authenticate_user(db, request)
 
 
 if __name__ == "__main__":

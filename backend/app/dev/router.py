@@ -2,16 +2,14 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.auth.models.user import Role, User
-from app.auth.security import create_access_token, create_refresh_token
-
-# Ensure relationship targets are registered before a User instance is mapped.
-from app.db.session import get_db
+from app.auth.security import create_access_token
+from app.auth.service import issue_refresh_token
+from app.db.session import DBSession
 
 DEV_USER_EMAIL = "dev@example.com"
 
@@ -61,7 +59,7 @@ class DevAuthErrorResponse(BaseModel):
 )
 def issue_dev_access_token(
     response: Response,
-    db: Annotated[Session, Depends(get_db)],
+    db: DBSession,
 ) -> None:
 
     # scalar : SQLAlchemy Session 객체가 가진 메서드
@@ -85,6 +83,8 @@ def issue_dev_access_token(
 
     db.commit()
 
+    refresh_token = issue_refresh_token(db, user)
+
     response.set_cookie(
         key="accessToken",
         value=create_access_token(user.user_id),
@@ -95,7 +95,7 @@ def issue_dev_access_token(
     )
     response.set_cookie(
         key="refreshToken",
-        value=create_refresh_token(user.user_id),
+        value=refresh_token,
         httponly=True,
         secure=True,
         samesite="lax",
