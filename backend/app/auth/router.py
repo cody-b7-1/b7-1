@@ -9,7 +9,6 @@ from fastapi import (
     Response,
     status,
 )
-from sqlalchemy import select
 
 from app.auth.dependencies import (
     CurrentUser,
@@ -17,7 +16,6 @@ from app.auth.dependencies import (
     get_required_refresh_token,
 )
 from app.auth.email import deliver_email_verification_email
-from app.auth.models.user import User
 from app.auth.schemas import (
     CurrentUserResponse,
     EmailSendRequest,
@@ -106,11 +104,15 @@ def get_me(
     summary="회원가입",
     description=(
         "이메일 주소와 비밀번호로 계정을 생성하고 생성된 사용자의 이메일 주소와 "
-        "닉네임을 반환합니다."
+        "닉네임을 반환합니다. 인증 메일은 응답 후 백그라운드에서 전송하며, SMTP "
+        "전송 실패는 로그로 기록되고 이미 생성된 회원가입 응답에는 영향을 주지 않습니다."
     ),
     responses={
         status.HTTP_201_CREATED: {
-            "description": "회원가입에 성공하여 생성된 사용자 정보를 반환합니다.",
+            "description": (
+                "회원가입에 성공하여 생성된 사용자 정보를 반환하고 인증 메일 전송을 "
+                "예약했습니다. 이후 SMTP 전송 실패 여부와 관계없이 이 응답을 유지합니다."
+            ),
         },
         status.HTTP_409_CONFLICT: {
             "description": "삭제되지 않은 계정에 이미 등록된 이메일 주소입니다.",
@@ -139,8 +141,6 @@ def sign_up(
             detail="이미 등록된 이메일 주소입니다.",
         ) from None
 
-    token = create_email_verification(db, user)
-    background_tasks.add_task(deliver_email_verification_email, user.email, token)
     return SignUpResponse(email=user.email, nickname=user.nickname)
 
 
@@ -209,11 +209,15 @@ def login(
     summary="이메일 인증 링크 발송",
     description=(
         "이메일 인증 링크 발송 요청을 접수합니다. 계정 존재 여부나 기존 인증 여부와 관계없이 "
-        "동일한 응답을 반환합니다."
+        "동일한 응답을 반환합니다. 메일은 응답 후 백그라운드에서 전송하며, SMTP 전송 "
+        "실패는 로그로 기록되고 접수 응답에는 영향을 주지 않습니다."
     ),
     responses={
         status.HTTP_202_ACCEPTED: {
-            "description": "이메일 인증 링크 발송 요청을 접수했습니다.",
+            "description": (
+                "이메일 인증 링크 발송 요청을 접수했습니다. 이후 SMTP 전송 실패 여부와 "
+                "관계없이 이 응답을 유지합니다."
+            ),
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "이메일이 누락되었거나 형식이 올바르지 않습니다.",
@@ -226,22 +230,19 @@ def login(
 def send_email_verification_link(
     request: EmailSendRequest, background_tasks: BackgroundTasks, db: DBSession
 ) -> None:
-    """Send a new verification email without revealing account existence."""
 
-    # 인증되지 않았으며 삭제되지 않은 사용자 찾기
-    user = db.scalar(
-        select(User).where(
-            User.email == str(request.email).lower(),
-            User.deleted_at.is_(None),
-            User.email_verified_at.is_(None),
-        )
+    result = create_email_verification(db, str(request.email))
+
+    if result is None:
+        return
+
+    email, token = result
+
+    background_tasks.add_task(
+        deliver_email_verification_email,
+        email,
+        token,
     )
-
-    # 찾은 경우
-    if user is not None:
-        # 인증 토큰 생성 및 전송
-        token = create_email_verification(db, user)
-        background_tasks.add_task(deliver_email_verification_email, user.email, token)
 
 
 @router.post(
@@ -252,11 +253,15 @@ def send_email_verification_link(
     summary="이메일 인증 토큰 검증",
     description=(
         "프런트엔드가 인증 링크에 포함된 토큰을 요청 본문으로 전송하면 해당 토큰을 "
-        "검증합니다."
+        "검증합니다. 인증 성공 시 해당 사용자의 이메일 인증 토큰을 모두 무효화하여 "
+        "재사용할 수 없게 합니다."
     ),
     responses={
         status.HTTP_204_NO_CONTENT: {
-            "description": "이메일 인증에 성공했습니다.",
+            "description": (
+                "이메일 인증에 성공했으며 해당 사용자의 모든 이메일 인증 토큰을 "
+                "무효화했습니다."
+            ),
         },
         status.HTTP_400_BAD_REQUEST: {
             "description": "토큰이 올바르지 않거나 만료·사용·무효화되었습니다.",

@@ -14,9 +14,11 @@ from app.auth.models.user import Role, User
 from app.auth.schemas import LoginRequest, SignUpRequest
 from app.auth.security import (
     create_refresh_token,
+    hash_email_verification_token,
     hash_password,
     hash_refresh_token,
     verify_access_token,
+    verify_email_verification_token_hash,
     verify_password,
     verify_refresh_token,
     verify_refresh_token_hash,
@@ -270,19 +272,33 @@ class AuthServiceTests(unittest.TestCase):
 
         token = create_email_verification(db, user)
 
-        self.assertFalse(verify_password("old-token", verification.token_hash))
-        self.assertTrue(verify_password(token, verification.token_hash))
+        self.assertEqual(
+            verification.token_hash,
+            hash_email_verification_token(token),
+        )
+        self.assertEqual(len(verification.token_hash), 64)
+        self.assertFalse(
+            verify_email_verification_token_hash(
+                "old-token", verification.token_hash
+            )
+        )
+        self.assertTrue(
+            verify_email_verification_token_hash(token, verification.token_hash)
+        )
         self.assertGreater(
             verification.expires_at, datetime.now(UTC).replace(tzinfo=None)
         )
         db.commit.assert_called_once()
 
-    def test_valid_verification_token_marks_user_and_consumes_record(self) -> None:
+    def test_valid_verification_token_marks_user_and_invalidates_all_user_tokens(
+        self,
+    ) -> None:
         db = Mock()
         token = "valid-token"
         user = SimpleNamespace(deleted_at=None, email_verified_at=None)
         verification = SimpleNamespace(
-            token_hash=hash_password(token),
+            user_id=uuid4(),
+            token_hash=hash_email_verification_token(token),
             user=user,
             expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
         )
@@ -291,14 +307,62 @@ class AuthServiceTests(unittest.TestCase):
         verify_email_verification_token(db, token)
 
         self.assertIsNotNone(user.email_verified_at)
-        db.delete.assert_called_once_with(verification)
+        db.execute.assert_called_once()
+        delete_statement = db.execute.call_args.args[0]
+        self.assertEqual(delete_statement.table.name, "email_verifications")
+        self.assertEqual(
+            delete_statement.whereclause.right.value,
+            verification.user_id,
+        )
+        db.commit.assert_called_once()
+
+    def test_consumed_verification_token_cannot_be_reused(self) -> None:
+        db = Mock()
+        db.scalars.return_value.all.side_effect = [
+            [
+                SimpleNamespace(
+                    user_id=uuid4(),
+                    token_hash=hash_email_verification_token("one-time-token"),
+                    user=SimpleNamespace(
+                        deleted_at=None,
+                        email_verified_at=None,
+                    ),
+                    expires_at=datetime.now(UTC).replace(tzinfo=None)
+                    + timedelta(hours=1),
+                )
+            ],
+            [],
+        ]
+
+        verify_email_verification_token(db, "one-time-token")
+
+        with self.assertRaises(InvalidEmailVerificationTokenError):
+            verify_email_verification_token(db, "one-time-token")
+
+        db.commit.assert_called_once()
+
+    def test_legacy_argon2_verification_token_remains_valid(self) -> None:
+        db = Mock()
+        token = "legacy-token"
+        verification = SimpleNamespace(
+            user_id=uuid4(),
+            token_hash=hash_password(token),
+            user=SimpleNamespace(deleted_at=None, email_verified_at=None),
+            expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
+        )
+        db.scalars.return_value.all.return_value = [verification]
+
+        verify_email_verification_token(db, token)
+
+        self.assertIsNotNone(verification.user.email_verified_at)
+        db.execute.assert_called_once()
         db.commit.assert_called_once()
 
     def test_expired_or_invalid_verification_token_is_rejected(self) -> None:
         db = Mock()
         expired_token = "expired-token"
         expired_verification = SimpleNamespace(
-            token_hash=hash_password(expired_token),
+            token_hash=hash_email_verification_token(expired_token),
             user=SimpleNamespace(deleted_at=None, email_verified_at=None),
             expires_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=1),
         )

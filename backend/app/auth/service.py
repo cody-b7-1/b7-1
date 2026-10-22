@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.auth.security import (
     RefreshTokenPayload,
     create_access_token,
     create_refresh_token,
+    hash_email_verification_token,
     hash_password,
     hash_refresh_token,
     verify_password,
@@ -77,64 +78,107 @@ def create_user(db: Session, request: SignUpRequest) -> User:
     return user
 
 
-def create_email_verification(db: Session, user: User) -> str:
-    """Create or replace a user's one-time email verification token."""
-    token = token_urlsafe(32)
-    # Locking the user row serializes resend requests for one account. This prevents
-    # two concurrent requests from leaving different tokens valid at the same time.
-    db.scalar(select(User).where(User.user_id == user.user_id).with_for_update())
-    verification = db.scalar(
-        select(EmailVerification)
-        .where(EmailVerification.user_id == user.user_id)
+def create_email_verification(db: Session, email: str) -> tuple[str, str] | None:
+
+    # 사용자 조회 + 잠금
+    user = db.scalar(
+        select(User)
+        .where(
+            User.email == email.lower(),
+            User.deleted_at.is_(None),
+        )
         .with_for_update()
     )
+
+    # 사용자가 없거나 이미 인증된 경우
+    if user is None or user.email_verified_at is not None:
+        db.rollback()
+        return None
+
+    # 새로운 토큰 생성
+    token = token_urlsafe(32)
+
     expires_at = (
         datetime.now(UTC) + timedelta(hours=settings.email_verification_expire_hours)
     ).replace(tzinfo=None)
 
-    if verification is None:
-        verification = EmailVerification(
-            verification_id=uuid4(),
-            user_id=user.user_id,
-            token_hash=hash_password(token),
-            expires_at=expires_at,
-        )
-        db.add(verification)
-    else:
-        verification.token_hash = hash_password(token)
-        verification.expires_at = expires_at
+    # email verification 생성
+    verification = EmailVerification(
+        verification_id=uuid4(),
+        user_id=user.user_id,
+        token_hash=hash_email_verification_token(token),
+        expires_at=expires_at,
+    )
 
+    db.add(verification)
+
+    user_email = user.email
     db.commit()
-    return token
+
+    return user_email, token
 
 
 def verify_email_verification_token(db: Session, token: str) -> None:
-    """Consume a valid verification token and mark its user as verified."""
-    now = datetime.now(UTC).replace(tzinfo=None)
+    try:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        token_hash = hash_email_verification_token(token)
 
-    verifications = db.scalars(
-        select(EmailVerification)
-        .where(EmailVerification.expires_at > now)
-        .with_for_update()
-    ).all()
+        # 1. 잠금 없이 해당 토큰 식별, 사용자 찾기
+        matched = db.scalar(
+            select(EmailVerification).where(
+                EmailVerification.token_hash == token_hash,
+                EmailVerification.expires_at > now,
+            )
+        )
 
-    for verification in verifications:
-        if verification.expires_at <= now:
-            continue
-        if not verify_password(token, verification.token_hash):
-            continue
-
-        user = verification.user
-
-        if user.deleted_at is not None or user.email_verified_at is not None:
+        if matched is None:
             raise InvalidEmailVerificationTokenError
 
-        user.email_verified_at = now
-        db.delete(verification)
-        db.commit()
-        return
+        # 2. 사용자 행 잠금
+        user = db.scalar(
+            select(User)
+            .where(User.user_id == matched.user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
 
-    raise InvalidEmailVerificationTokenError
+        if (
+            user is None
+            or user.deleted_at is not None
+            or user.email_verified_at is not None
+        ):
+            raise InvalidEmailVerificationTokenError
+
+        # 3. 잠금 획득 후 토큰 재확인
+        now = datetime.now(UTC).replace(tzinfo=None)
+
+        verification = db.scalar(
+            select(EmailVerification)
+            .where(
+                EmailVerification.verification_id == matched.verification_id,
+                EmailVerification.token_hash == token_hash,
+                EmailVerification.expires_at > now,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+        if verification is None:
+            raise InvalidEmailVerificationTokenError
+
+        # 4. 인증 완료
+        user.email_verified_at = now
+
+        # 5. 관련된 해당 사용자의 모든 인증 토큰 삭제
+        db.execute(
+            delete(EmailVerification).where(EmailVerification.user_id == user.user_id)
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 def authenticate_user(db: Session, request: LoginRequest) -> User:
@@ -199,8 +243,9 @@ def login_user(db: Session, request: LoginRequest) -> tuple[str, str]:
     user = authenticate_user(db, request)
 
     # refresh token, access token 생성
-    refresh_token = issue_refresh_token(db, user)
     access_token = create_access_token(user.user_id)
+    refresh_token = issue_refresh_token(db, user)
+
     return access_token, refresh_token
 
 
