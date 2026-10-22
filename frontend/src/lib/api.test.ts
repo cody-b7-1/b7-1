@@ -33,7 +33,7 @@ test("signUp: 201 + Set-Cookie면 User 반환", async () => {
 test("login: 204 + Set-Cookie면 null", async () => {
   const fetch = mockFetch(204, undefined, cookie);
 
-  expect(await login("a@b.c", "pw")).toBeNull();
+  expect(await login({ email: "a@b.c", password: "pw" })).toBeNull();
   expect(sent(fetch)).toEqual({
     url: "/api/auth/login",
     method: "POST",
@@ -45,7 +45,7 @@ test("login: 401이면 에러 body를 담은 ApiError", async () => {
   mockFetch(401, { detail: "invalid credentials" });
 
   // mock Response body는 한 번만 읽을 수 있어서 요청은 한 번만 보내고 promise를 재사용
-  const req = login("a@b.c", "wrong");
+  const req = login({ email: "a@b.c", password: "wrong" });
   await expect(req).rejects.toBeInstanceOf(ApiError);
   await expect(req).rejects.toMatchObject({ status: 401, body: { detail: "invalid credentials" } });
 });
@@ -109,4 +109,10 @@ test("JSON이 아닌 응답이면 원문 text를 body로 담은 ApiError", async
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("Bad Gateway", { status: 502 })));
 
   await expect(getMe()).rejects.toMatchObject({ status: 502, body: "Bad Gateway" });
+});
+
+test("성공 응답인데 JSON이 아니면 text를 반환하지 않고 ApiError", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<html>", { status: 200 })));
+
+  await expect(getMe()).rejects.toMatchObject({ status: 200, body: "<html>" });
 });
