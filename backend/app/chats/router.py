@@ -40,6 +40,9 @@ ChatIdPath = Annotated[
         status.HTTP_404_NOT_FOUND: {
             "description": "요청한 철학자를 찾을 수 없거나 비활성화 상태입니다.",
         },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "철학자 AI와의 연결이 일시적으로 원활하지 않습니다.",
+        },
     },
 )
 def start_chat(
@@ -59,6 +62,12 @@ def start_chat(
     responses={
         status.HTTP_404_NOT_FOUND: {
             "description": "채팅방을 찾을 수 없거나, 요청한 철학자를 찾을 수 없습니다.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "같은 채팅방에서 이전 질문의 답변을 생성하는 중입니다.",
+        },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "철학자 AI와의 연결이 일시적으로 원활하지 않습니다.",
         },
     },
 )
@@ -112,6 +121,9 @@ def list_chats(
         status.HTTP_404_NOT_FOUND: {
             "description": "해당 채팅방을 찾을 수 없습니다.",
         },
+        status.HTTP_409_CONFLICT: {
+            "description": "같은 채팅방에서 이전 질문의 답변을 생성하는 중입니다.",
+        },
     },
 )
 def delete_chat(
@@ -147,14 +159,12 @@ def get_chat(
     ] = 30,
     cursor: Annotated[
         UUID4 | None,
-        Query(
-            description="이 메시지 ID보다 이전(더 오래된) 메시지를 조회하기 위한 커서"
-        ),
+        Query(description="이전 메시지 목록을 조회하기 위한 커서 (메시지 ID)"),
     ] = None,
 ) -> GetChatResponse:
     return chat_service.get_chat(
         chat_id=chat_id,
+        user_id=current_user.user_id,
         limit=limit,
         cursor=cursor,
-        user_id=current_user.user_id,
     )
