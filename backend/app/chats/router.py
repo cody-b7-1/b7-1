@@ -12,7 +12,7 @@ from app.chats.schemas import (
     StartChatRequest,
     StartChatResponse,
 )
-from app.chats.service import ChatService
+from app.chats.service import ChatServiceDep
 
 router = APIRouter(
     prefix="/chats",
@@ -20,7 +20,6 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)],
 )
 
-ChatServiceDep = Annotated[ChatService, Depends(ChatService)]
 ChatIdPath = Annotated[
     UUID4,
     Path(
