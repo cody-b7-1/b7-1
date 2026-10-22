@@ -3,12 +3,13 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Response, status
-from pydantic import BaseModel, Field
+from pydantic import Field
 from sqlalchemy import select
 
 from app.auth.models.user import Role, User
 from app.auth.security import create_access_token
 from app.auth.service import issue_refresh_token
+from app.core.schemas import CamelResponseModel
 from app.db.session import DBSession
 
 DEV_USER_EMAIL = "dev@example.com"
@@ -16,7 +17,7 @@ DEV_USER_EMAIL = "dev@example.com"
 router = APIRouter(prefix="/dev", tags=["개발"])
 
 
-class DevAuthErrorResponse(BaseModel):
+class DevAuthErrorResponse(CamelResponseModel):
     detail: Annotated[
         str,
         Field(

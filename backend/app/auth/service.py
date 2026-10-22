@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from app.auth.models.refresh_token import RefreshToken
 from app.auth.models.user import Role, User
 from app.auth.schemas import LoginRequest, SignUpRequest
 from app.auth.security import (
+    RefreshTokenPayload,
     create_access_token,
     create_refresh_token,
     hash_password,
@@ -37,6 +38,10 @@ class PasswordMismatchError(Exception):
 
 # 로그인용 - 이메일 인증 x 경우
 class EmailNotVerifiedError(Exception):
+    pass
+
+
+class InvalidRefreshTokenError(Exception):
     pass
 
 
@@ -131,3 +136,52 @@ def login_user(db: Session, request: LoginRequest) -> tuple[str, str]:
     refresh_token = issue_refresh_token(db, user)
     access_token = create_access_token(user.user_id)
     return access_token, refresh_token
+
+
+def rotate_refresh_token(
+    db: Session,
+    payload: RefreshTokenPayload,
+    refresh_token: str,
+) -> tuple[str, str]:
+    user_id = UUID(payload["sub"])
+
+    # update
+
+    try:
+        # refresh token db에서 삭제(폐기)
+        result = db.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.token_hash == hash_refresh_token(refresh_token),
+                RefreshToken.is_revoked.is_(False),
+            )
+            .values(is_revoked=True)
+        )
+        if result.rowcount != 1:  # 실제 반영된 행의 수가 1개여야함
+            raise InvalidRefreshTokenError
+
+        # access, refresh jwt 생성
+        new_token_id = uuid4()
+        new_refresh_token = create_refresh_token(user_id, token_id=new_token_id)
+        new_access_token = create_access_token(
+            user_id
+        )  # commit 밖에 놓을 시 생성 실패 후 refresh token만 저장, 생성될 수 있음
+
+        # refresh token db에 추가
+        db.add(
+            RefreshToken(
+                token_id=new_token_id,
+                user_id=user_id,
+                token_hash=hash_refresh_token(new_refresh_token),
+                expires_at=(
+                    datetime.now(UTC)
+                    + timedelta(days=settings.jwt_refresh_token_expire_days)
+                ).replace(tzinfo=None),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return new_access_token, new_refresh_token
