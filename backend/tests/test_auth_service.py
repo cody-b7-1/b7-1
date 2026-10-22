@@ -13,8 +13,10 @@ from app.auth.models.refresh_token import RefreshToken
 from app.auth.models.user import Role, User
 from app.auth.schemas import LoginRequest, SignUpRequest
 from app.auth.security import (
+    create_refresh_token,
     hash_password,
     hash_refresh_token,
+    verify_access_token,
     verify_password,
     verify_refresh_token,
     verify_refresh_token_hash,
@@ -24,6 +26,7 @@ from app.auth.service import (
     EmailNotFoundError,
     EmailNotVerifiedError,
     InvalidEmailVerificationTokenError,
+    InvalidRefreshTokenError,
     PasswordMismatchError,
     authenticate_user,
     create_email_verification,
@@ -31,6 +34,7 @@ from app.auth.service import (
     issue_refresh_token,
     login_user,
     revoke_refresh_token,
+    rotate_refresh_token,
     verify_email_verification_token,
 )
 
@@ -194,6 +198,41 @@ class AuthServiceTests(unittest.TestCase):
         authenticate.assert_called_once_with(db, request)
         issue.assert_called_once_with(db, user)
         access.assert_called_once_with(user.user_id)
+
+    def test_rotate_refresh_token_atomically_replaces_stored_token(self) -> None:
+        user = self._login_user()
+        old_token = create_refresh_token(user.user_id)
+        payload = verify_refresh_token(old_token)
+        db = Mock()
+        db.execute.return_value.rowcount = 1
+
+        access_token, new_token = rotate_refresh_token(db, payload, old_token)
+
+        self.assertNotEqual(new_token, old_token)
+        self.assertEqual(verify_access_token(access_token)["sub"], payload["sub"])
+        new_payload = verify_refresh_token(new_token)
+        self.assertEqual(new_payload["sub"], payload["sub"])
+        db.execute.assert_called_once()
+        db.add.assert_called_once()
+        saved_token = db.add.call_args.args[0]
+        self.assertEqual(str(saved_token.token_id), new_payload["jti"])
+        self.assertEqual(saved_token.token_hash, hash_refresh_token(new_token))
+        db.commit.assert_called_once_with()
+
+    def test_rotate_refresh_token_rejects_missing_or_concurrently_used_token(
+        self,
+    ) -> None:
+        user = self._login_user()
+        old_token = create_refresh_token(user.user_id)
+        db = Mock()
+        db.execute.return_value.rowcount = 0
+
+        with self.assertRaises(InvalidRefreshTokenError):
+            rotate_refresh_token(db, verify_refresh_token(old_token), old_token)
+
+        db.rollback.assert_called_once_with()
+        db.add.assert_not_called()
+        db.commit.assert_not_called()
 
     def test_authenticate_user_rejects_unverified_account_separately(self) -> None:
         db = Mock()

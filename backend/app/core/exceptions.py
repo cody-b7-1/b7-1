@@ -8,16 +8,34 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
 
+from app.chats.exceptions import (
+    CHAT_FIELD_LABELS,
+    CHAT_REQUIRED_FIELD_MESSAGES,
+    ChatDomainError,
+)
+
 REQUIRED_FIELD_MESSAGES: dict[str, str] = {
     "email": "이메일은 필수 입력값입니다.",
     "nickname": "닉네임은 필수 입력값입니다.",
     "password": "비밀번호는 필수 입력값입니다.",
+    **CHAT_REQUIRED_FIELD_MESSAGES,
 }
 
 FIELD_LABELS: dict[str, tuple[str, str]] = {
     "nickname": ("닉네임", "은"),
     "password": ("비밀번호", "는"),
+    **CHAT_FIELD_LABELS,
 }
+
+
+async def chat_domain_error_handler(
+    _request: Request, error: ChatDomainError
+) -> JSONResponse:
+    """Return a consistent JSON response for chat domain business errors."""
+    return JSONResponse(
+        status_code=error.status_code,
+        content={"detail": error.detail},
+    )
 
 
 async def unhandled_exception_handler(
@@ -80,12 +98,40 @@ def _validation_error_message(validation_error: Mapping[str, object]) -> str:
             f"{label}{particle} 최대 {context['max_length']}자까지 입력할 수 있습니다."
         )
 
+    if field and error_type == "greater_than":
+        label, particle = field
+        return f"{label}{particle} {context['gt']}보다 커야 합니다."
+
+    if field and error_type == "greater_than_equal":
+        label, particle = field
+        return f"{label}{particle} 최소 {context['ge']} 이상이어야 합니다."
+
+    if field and error_type == "less_than_equal":
+        label, particle = field
+        return f"{label}{particle} 최대 {context['le']} 이하이어야 합니다."
+
+    if error_type == "uuid_parsing":
+        if field:
+            label, particle = field
+            return f"{label}{particle} 올바른 UUID 형식이어야 합니다."
+        return "올바른 UUID 형식이 아닙니다."
+
+    if error_type in ("int_parsing", "int_type"):
+        if field:
+            label, particle = field
+            return f"{label}{particle} 숫자 형식이어야 합니다."
+        return "올바른 숫자 형식이 아닙니다."
+
     return str(validation_error.get("msg", ""))
 
 
 # 정의한 예외 처리 함수를 FastAPI 애플리케이션에 등록
 def register_exception_handlers(app: FastAPI) -> None:
     """Register application-wide exception handlers."""
+    app.add_exception_handler(
+        ChatDomainError,
+        cast(ExceptionHandler, chat_domain_error_handler),
+    )
     app.add_exception_handler(
         RequestValidationError,
         cast(ExceptionHandler, request_validation_error_handler),

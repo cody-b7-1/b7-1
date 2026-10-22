@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from_email: str = ""
     smtp_use_tls: bool = True
+    # LLM (OpenAI 호환 Chat Completions API) 설정
+    llm_api_key: str = ""
+    llm_base_url: str = "https://copa.codyssey.kr/v1"
+    llm_model: str = "gpt-5-mini"
+    llm_timeout_seconds: float = 20.0
 
     @property
     def database_url(self) -> URL:
@@ -56,4 +61,4 @@ class Settings(BaseSettings):
         return self.app_env == "local"
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]
