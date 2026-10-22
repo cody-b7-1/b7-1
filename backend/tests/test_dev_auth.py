@@ -3,6 +3,7 @@ import subprocess
 import sys
 import unittest
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 from uuid import uuid4
 
 os.environ["APP_ENV"] = "local"
@@ -43,7 +44,10 @@ class FakeSession:
 
 
 class DevAuthTests(unittest.TestCase):
-    def test_sets_login_compatible_token_cookies_and_reuses_dev_user(self) -> None:
+    @patch("app.dev.router.logger")
+    def test_sets_login_compatible_token_cookies_and_reuses_dev_user(
+        self, logger
+    ) -> None:
         db = FakeSession()
         first_response = Response(status_code=204)
 
@@ -85,6 +89,8 @@ class DevAuthTests(unittest.TestCase):
         self.assertEqual(
             verify_refresh_token(refresh_token)["sub"], str(db.user.user_id)
         )
+        self.assertEqual(logger.info.call_count, 2)
+        logger.info.assert_called_with("개발용 로그인에 성공했습니다.")
 
     def test_validates_token_types(self) -> None:
         user_id = uuid4()

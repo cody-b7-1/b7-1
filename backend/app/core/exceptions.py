@@ -28,7 +28,7 @@ async def unhandled_exception_handler(
 ) -> JSONResponse:
     # 못잡은 에러에 대해 log 추가
     logger.error(
-        "Unhandled server exception",
+        "처리되지 않은 서버 예외가 발생했습니다.",
         exc_info=(type(error), error, error.__traceback__),
     )
     return JSONResponse(

@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
@@ -6,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.auth.models.user import Role, User
 from app.auth.schemas import SignUpRequest
 from app.auth.security import hash_password
+
+logger = logging.getLogger(__name__)
 
 
 class EmailAlreadyRegisteredError(Exception):
@@ -38,4 +41,5 @@ def create_user(db: Session, request: SignUpRequest) -> User:
             ) from error
         raise
 
+    logger.info("회원가입에 성공했습니다.")
     return user

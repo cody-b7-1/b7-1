@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import patch
 
 from sqlalchemy.exc import IntegrityError
 
@@ -37,7 +38,8 @@ class FailingSession(FakeSession):
 
 
 class AuthServiceTests(unittest.TestCase):
-    def test_create_user_hashes_password_and_persists_user(self) -> None:
+    @patch("app.auth.service.logger")
+    def test_create_user_hashes_password_and_persists_user(self, logger) -> None:
         db = FakeSession()
         request = SignUpRequest(
             email="User@Example.com",
@@ -53,6 +55,7 @@ class AuthServiceTests(unittest.TestCase):
         self.assertEqual(user.nickname, request.nickname)
         self.assertLessEqual(len(user.password_hash), 255)
         self.assertTrue(verify_password(request.password, user.password_hash))
+        logger.info.assert_called_once_with("회원가입에 성공했습니다.")
 
     def test_create_user_maps_only_active_email_constraint_to_duplicate_error(
         self,
