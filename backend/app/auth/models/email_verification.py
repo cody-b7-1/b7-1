@@ -21,9 +21,12 @@ class EmailVerification(CreatedAtMixin, Base):
         SAUUID(as_uuid=True), primary_key=True
     )
     user_id: Mapped[UUID] = mapped_column(
-        SAUUID(as_uuid=True), ForeignKey("users.user_id"), unique=True, nullable=False
+        SAUUID(as_uuid=True),
+        ForeignKey("users.user_id"),
+        index=True,
+        nullable=False,
     )
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False)
 
-    user: Mapped[User] = relationship(back_populates="email_verification")
+    user: Mapped[User] = relationship(back_populates="email_verifications")
