@@ -84,12 +84,15 @@ def authenticate_user(db: Session, request: LoginRequest) -> User:
     )
 
     if user is None:
+        logger.warning("로그인 인증에 실패했습니다.")
         raise EmailNotFoundError
 
     if not verify_password(request.password, user.password_hash):
+        logger.warning("로그인 인증에 실패했습니다.")
         raise PasswordMismatchError
 
     if user.email_verified_at is None:
+        logger.debug("이메일 인증이 완료되지 않아 로그인에 실패했습니다.")
         raise EmailNotVerifiedError
 
     return user
@@ -139,6 +142,7 @@ def login_user(db: Session, request: LoginRequest) -> tuple[str, str]:
     # refresh token, access token 생성
     refresh_token = issue_refresh_token(db, user)
     access_token = create_access_token(user.user_id)
+    logger.info("로그인에 성공했습니다.")
     return access_token, refresh_token
 
 

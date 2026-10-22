@@ -1,4 +1,3 @@
-import logging
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
@@ -14,7 +13,6 @@ from app.core.schemas import CamelResponseModel
 from app.db.session import DBSession
 
 DEV_USER_EMAIL = "dev@example.com"
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dev", tags=["개발"])
 
@@ -104,4 +102,3 @@ def issue_dev_access_token(
         samesite="lax",
         path="/api/auth",
     )
-    logger.info("개발용 로그인에 성공했습니다.")
