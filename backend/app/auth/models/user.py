@@ -61,8 +61,8 @@ class User(CreatedAtMixin, UpdatedAtMixin, SoftDeleteMixin, Base):
     )
     email_verified_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, nullable=True)
 
-    email_verification: Mapped[EmailVerification | None] = relationship(
-        back_populates="user", uselist=False
+    email_verifications: Mapped[list[EmailVerification]] = relationship(
+        back_populates="user"
     )
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user")
     chats: Mapped[list[Chat]] = relationship(back_populates="user")

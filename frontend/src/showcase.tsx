@@ -1,6 +1,11 @@
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { MemoryRouter } from "react-router";
 import "./index.css";
+import { PhilosopherAvatar } from "@/components/philosopher-avatar";
+import { PhilosopherDetailDialog } from "@/components/philosopher-detail-dialog";
+import { PhilosopherPortrait } from "@/components/philosopher-portrait";
+import { SiteHeader } from "@/components/site-header";
 import {
   Avatar,
   AvatarBadge,
@@ -32,6 +37,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { PhilosopherDetailed } from "@/lib/api";
+import { getMockResponse } from "@/lib/api.mock";
+import { type ResolvedPhilosopher, withDefaults } from "@/lib/philosopher";
 
 const variants = [
   "default",
@@ -43,7 +51,31 @@ const variants = [
 ] as const;
 const sizes = ["xs", "sm", "default", "lg"] as const;
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const philosophers = [1, 2, 3, 4].map((id) =>
+  withDefaults(
+    getMockResponse("GET", `/philosophers/${id}`) as PhilosopherDetailed,
+  ),
+);
+// 이미지·색이 비어 있을 때 기본값이 어떻게 보이는지 확인용
+const fallbackPhilosopher = withDefaults({
+  id: 0,
+  name: "무명",
+  description: null,
+  profileImageUrl: null,
+  iconImageUrl: null,
+  introduction: null,
+  avatarColor: null,
+  inkColor: null,
+  softColor: null,
+});
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold">{title}</h2>
@@ -54,6 +86,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Showcase() {
   const [name, setName] = useState("");
+  const [selected, setSelected] = useState<ResolvedPhilosopher | null>(null);
 
   return (
     <main className="mx-auto max-w-3xl space-y-10 p-8">
@@ -162,12 +195,83 @@ function Showcase() {
           </DialogContent>
         </Dialog>
       </Section>
+
+      <h1 className="text-2xl font-bold">App Components</h1>
+
+      <Section title="SiteHeader">
+        <div className="space-y-2 rounded-xl border">
+          <SiteHeader />
+          <SiteHeader email="test@test.com" onLogout={() => {}} />
+        </div>
+      </Section>
+
+      <Section title="PhilosopherAvatar">
+        <div className="flex items-center gap-4">
+          {[...philosophers, fallbackPhilosopher].map((p) => (
+            <PhilosopherAvatar key={p.id} philosopher={p} />
+          ))}
+          <PhilosopherAvatar
+            philosopher={philosophers[0]}
+            className="size-16"
+          />
+        </div>
+        {/* shadcn AvatarGroup으로 겹치기 (AuthShell과 같은 설정) */}
+        <AvatarGroup max={4} className="-space-x-3 *:data-[slot=avatar]:ring-4">
+          {philosophers.map((p) => (
+            <PhilosopherAvatar key={p.id} philosopher={p} className="size-14" />
+          ))}
+        </AvatarGroup>
+      </Section>
+
+      <Section title="PhilosopherPortrait">
+        <div className="grid grid-cols-3 gap-4 sm:grid-cols-5">
+          {[...philosophers, fallbackPhilosopher].map((p) => (
+            <PhilosopherPortrait key={p.id} philosopher={p} />
+          ))}
+        </div>
+      </Section>
+
+      <Section title="PhilosopherDetailDialog">
+        <div className="flex flex-wrap gap-2">
+          {[...philosophers, fallbackPhilosopher].map((p) => (
+            <Button key={p.id} variant="outline" onClick={() => setSelected(p)}>
+              {p.name}
+            </Button>
+          ))}
+        </div>
+        <PhilosopherDetailDialog
+          philosopher={selected}
+          onClose={() => setSelected(null)}
+          onStartChat={() => setSelected(null)}
+        />
+      </Section>
+
+      <Section title="AvatarGroup">
+        <div className="flex flex-col">
+          <AvatarGroup
+            max={4}
+            className="mb-6 -space-x-3 *:data-[slot=avatar]:ring-4"
+            aria-hidden
+          >
+            {philosophers.map((p) => (
+              <PhilosopherAvatar
+                key={p.id}
+                philosopher={p}
+                decorative
+                className="size-14"
+              />
+            ))}
+          </AvatarGroup>
+        </div>
+      </Section>
     </main>
   );
 }
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Showcase />
+    <MemoryRouter>
+      <Showcase />
+    </MemoryRouter>
   </StrictMode>,
 );

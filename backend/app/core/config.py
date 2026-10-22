@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     jwt_access_token_expire_days: Annotated[int, Field(gt=0)] = 7
     jwt_refresh_token_expire_days: Annotated[int, Field(gt=0)] = 14
 
+    # LLM (OpenAI 호환 Chat Completions API) 설정
+    llm_api_key: str = ""
+    llm_base_url: str = "https://copa.codyssey.kr/v1"
+    llm_model: str = "gpt-5-mini"
+    llm_timeout_seconds: float = 20.0
+
     @property
     def database_url(self) -> URL:
         return URL.create(
@@ -46,4 +52,4 @@ class Settings(BaseSettings):
         return self.app_env == "local"
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

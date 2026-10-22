@@ -1,6 +1,8 @@
 from typing import Annotated
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import EmailStr, Field
+
+from app.core.schemas import CamelModel, CamelResponseModel
 
 EmailAddress = Annotated[
     EmailStr,
@@ -13,7 +15,7 @@ EmailAddress = Annotated[
 ]
 
 
-class SignUpRequest(BaseModel):
+class SignUpRequest(CamelModel):
     """회원가입 요청입니다."""
 
     email: EmailAddress
@@ -37,7 +39,7 @@ class SignUpRequest(BaseModel):
     ]
 
 
-class SignUpResponse(BaseModel):
+class SignUpResponse(CamelResponseModel):
     """회원가입으로 생성된 사용자 정보입니다."""
 
     email: EmailAddress
@@ -52,14 +54,13 @@ class SignUpResponse(BaseModel):
     ]
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(CamelModel):
     """이메일과 비밀번호로 로그인하는 요청입니다."""
 
     email: EmailAddress
     password: Annotated[
         str,
         Field(
-            min_length=8,
             max_length=128,
             description="HTTPS로 전송하는 비밀번호입니다.",
             examples=["password123!"],
@@ -67,7 +68,7 @@ class LoginRequest(BaseModel):
     ]
 
 
-class CurrentUserResponse(BaseModel):
+class CurrentUserResponse(CamelResponseModel):
     """현재 로그인한 사용자 정보입니다."""
 
     email: EmailAddress
@@ -82,13 +83,13 @@ class CurrentUserResponse(BaseModel):
     ]
 
 
-class EmailSendRequest(BaseModel):
+class EmailSendRequest(CamelModel):
     """이메일 인증 링크 발송 요청입니다."""
 
     email: EmailAddress
 
 
-class EmailVerifyRequest(BaseModel):
+class EmailVerifyRequest(CamelModel):
     """이메일 인증 링크 토큰 검증 요청입니다."""
 
     token: Annotated[
