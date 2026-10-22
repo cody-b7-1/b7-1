@@ -1,9 +1,17 @@
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from app.chats.enums import SenderRole
+from app.chats.exceptions import (
+    ChatAIUnavailableError,
+    ChatBusyError,
+    ChatNotFoundError,
+    CursorMessageNotFoundError,
+    PhilosopherNotFoundError,
+)
 from app.chats.models.chat import Chat
 from app.chats.models.message import Message
 from app.chats.schemas import (
@@ -16,31 +24,94 @@ from app.chats.schemas import (
     StartChatRequest,
     StartChatResponse,
 )
+from app.db.mixins import utc_now
 from app.db.session import DBSession
 from app.philosophers.models.philosopher import Philosopher
+
+# MariaDB(1205: 잠금 대기 초과, NOWAIT 시 즉시 반환), MySQL 8(3572: NOWAIT 잠금 실패)
+LOCK_NOT_AVAILABLE_ERROR_CODES = frozenset({1205, 3572})
+
+
+def _is_lock_not_available(error: OperationalError) -> bool:
+    args = getattr(error.orig, "args", ())
+    return bool(args) and args[0] in LOCK_NOT_AVAILABLE_ERROR_CODES
 
 
 class ChatService:
     def __init__(self, db: DBSession) -> None:
         self.db = db
 
-    def _get_owned_chat(self, chat_id: UUID, user_id: UUID) -> Chat:
+    def _lock_chat(self, chat: Chat) -> None:
+        """채팅방 행을 NOWAIT로 잠가 같은 방의 동시 처리를 막는다.
+
+        이미 다른 요청이 잠갔다면 기다리지 않고 ChatBusyError(409)를 발생시킨다.
+        잠금은 commit 또는 롤백(세션 종료) 시 자동으로 해제된다.
+        """
+        try:
+            self.db.refresh(chat, with_for_update={"nowait": True})
+        except OperationalError as exc:
+            if _is_lock_not_available(exc):
+                raise ChatBusyError() from exc
+            raise  # 잠금 실패가 아닌 다른 DB 오류는 그대로 상위로 전달
+
+    def _get_owned_chat(
+        self, chat_id: UUID, user_id: UUID, *, lock: bool = False
+    ) -> Chat:
         chat = self.db.get(Chat, chat_id)
         if chat is None or chat.deleted_at is not None or chat.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 채팅방을 찾을 수 없습니다.",
-            )
+            raise ChatNotFoundError()
+
+        # 소유권을 먼저 확인한 뒤에 잠가서, 타인의 요청이 남의 채팅방 잠금에 영향을 주지 않게 한다.
+        if lock:
+            self._lock_chat(chat)
+            if chat.deleted_at is not None:
+                raise ChatNotFoundError()
         return chat
 
     def _get_active_philosopher(self, philosopher_id: int) -> Philosopher:
         philosopher = self.db.get(Philosopher, philosopher_id)
         if philosopher is None or not philosopher.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 철학자를 찾을 수 없습니다.",
-            )
+            raise PhilosopherNotFoundError()
         return philosopher
+
+    def _create_dialogue_turn(
+        self,
+        chat_id: UUID,
+        prompt: str,
+        philosopher: Philosopher,
+        base_time: datetime | None = None,
+    ) -> tuple[Message, Message]:
+        # 1. 철학자 AI 답변 생성 (TODO: 실제 LLM API 호출로 교체, 실패 시 503 에러 발생으로 DB 롤백 보호)
+        try:
+            # answer = self._call_llm(prompt, philosopher)
+            answer = f"{philosopher.name}의 답변입니다."
+        except Exception as exc:
+            raise ChatAIUnavailableError() from exc
+
+        now = base_time or utc_now()
+
+        # 2. 사용자 질문 메시지 생성
+        user_message = Message(
+            message_id=uuid4(),
+            chat_id=chat_id,
+            philosopher_id=None,
+            sender_role=SenderRole.USER,
+            content=prompt,
+            created_at=now,
+        )
+
+        # 3. 철학자 답변 메시지 생성 (성공한 완전한 답변만 생성, 사용자 질문보다 1초 후 시각으로 순서 보장)
+        assistant_message = Message(
+            message_id=uuid4(),
+            chat_id=chat_id,
+            philosopher_id=philosopher.philosopher_id,
+            sender_role=SenderRole.PHILOSOPHER,
+            content=answer,
+            is_success=True,
+            created_at=now + timedelta(seconds=1),
+        )
+
+        return user_message, assistant_message
 
     # POST /chats
     def start_chat(
@@ -51,59 +122,37 @@ class ChatService:
         # 1. 대화할 철학자 조회 및 활성화 여부 확인
         philosopher = self._get_active_philosopher(request.philosopher_id)
 
-        # 2. 채팅방(Chat) 생성 (첫 줄 기준 최대 80자, 추후 LLM 요약으로 고도화)
-        first_line = request.prompt.strip().splitlines()[0]
-        chat_title = first_line[:80]
+        now = utc_now()
+
+        # 2. 채팅방(Chat) 생성 (프롬프트 앞부분 최대 80자, 추후 LLM 요약으로 고도화)
+        chat_title = request.prompt[:80]
         chat = Chat(
             chat_id=uuid4(),
             user_id=user_id,
             current_philosopher_id=philosopher.philosopher_id,
             title=chat_title,
+            created_at=now,
+            updated_at=now,
         )
 
-        # 3. 사용자 첫 질문 메시지 생성
-        user_message = Message(
-            message_id=uuid4(),
+        # 3. 사용자 질문 및 철학자 답변 메시지 생성 (한 턴)
+        user_message, assistant_message = self._create_dialogue_turn(
             chat_id=chat.chat_id,
-            philosopher_id=None,
-            sender_role=SenderRole.USER,
-            content=request.prompt,
+            prompt=request.prompt,
+            philosopher=philosopher,
+            base_time=now,
         )
 
-        # 4. 철학자(AI) 첫 답변 생성 (TODO: LLM API 호출로 교체, llm 메시지 생성 여부 is_success로 저장)
-        answer = f"{philosopher.name}의 답변입니다."
-        assistant_message = Message(
-            message_id=uuid4(),
-            chat_id=chat.chat_id,
-            philosopher_id=philosopher.philosopher_id,
-            sender_role=SenderRole.PHILOSOPHER,
-            content=answer,
-            is_success=True,
-        )
-
-        # 5. DB 저장 (원자적 커밋)
+        # 4. DB 저장 (원자적 커밋)
         self.db.add_all([chat, user_message, assistant_message])
         self.db.commit()
 
-        # 6. 응답 스키마 반환
+        # 5. 응답 스키마 반환
         return StartChatResponse(
             chat_id=chat.chat_id,
             chat_title=chat.title,
             messages=[
-                MessageItem(
-                    message_id=user_message.message_id,
-                    sender_role=user_message.sender_role,
-                    philosopher_id=user_message.philosopher_id,
-                    content=user_message.content,
-                    created_at=user_message.created_at,
-                ),
-                MessageItem(
-                    message_id=assistant_message.message_id,
-                    sender_role=assistant_message.sender_role,
-                    philosopher_id=assistant_message.philosopher_id,
-                    content=assistant_message.content,
-                    created_at=assistant_message.created_at,
-                ),
+                MessageItem.model_validate(m) for m in (user_message, assistant_message)
             ],
         )
 
@@ -120,12 +169,7 @@ class ChatService:
         )
 
         if cursor is not None:
-            cursor_chat = self.db.get(Chat, cursor)
-            if cursor_chat is None or cursor_chat.deleted_at is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="기준 채팅방을 찾을 수 없습니다.",
-                )
+            cursor_chat = self._get_owned_chat(cursor, user_id)
             stmt = stmt.where(
                 (Chat.updated_at < cursor_chat.updated_at)
                 | (
@@ -161,7 +205,51 @@ class ChatService:
         request: SendMessageRequest,
         user_id: UUID,
     ) -> SendMessageResponse:
-        raise NotImplementedError
+        # 1. 채팅방 조회, 소유권 확인 및 잠금 (같은 방의 동시 전송은 409)
+        chat = self._get_owned_chat(chat_id, user_id, lock=True)
+
+        # 2. 대화할 철학자 조회 및 활성화 여부 확인
+        philosopher = self._get_active_philosopher(request.philosopher_id)
+
+        now = utc_now()
+        new_messages: list[Message] = []
+
+        # 3. 철학자가 변경된 경우에만 시스템 메시지 추가 및 시각 갱신
+        if chat.current_philosopher_id != philosopher.philosopher_id:
+            system_message = Message(
+                message_id=uuid4(),
+                chat_id=chat.chat_id,
+                philosopher_id=None,
+                sender_role=SenderRole.SYSTEM,
+                content=f"대화 상대가 {philosopher.name}(으)로 변경되었습니다.",
+                created_at=now,
+            )
+            chat.current_philosopher_id = philosopher.philosopher_id
+            new_messages.append(system_message)
+            now += timedelta(seconds=1)
+
+        # 4. 사용자 질문 및 철학자 답변 메시지 생성 (실패 시 여기서 503 발생 -> 메모리/DB 변경 없이 안전하게 중단)
+        user_message, assistant_message = self._create_dialogue_turn(
+            chat_id=chat.chat_id,
+            prompt=request.prompt,
+            philosopher=philosopher,
+            base_time=now,
+        )
+
+        # 5. 시간 순서대로 메시지 배치 ([SYSTEM, USER, PHILOSOPHER])
+        new_messages.extend([user_message, assistant_message])
+
+        # 6. 채팅방 최신 활동 시각(updated_at) 갱신
+        chat.updated_at = assistant_message.created_at
+
+        # 7. DB 저장 (원자적 커밋)
+        self.db.add_all([chat, *new_messages])
+        self.db.commit()
+
+        # 8. 응답 스키마 반환
+        return SendMessageResponse(
+            messages=[MessageItem.model_validate(m) for m in new_messages],
+        )
 
     # DELETE /chats/{chat_id}
     def delete_chat(
@@ -169,7 +257,9 @@ class ChatService:
         chat_id: UUID,
         user_id: UUID,
     ) -> None:
-        pass
+        chat = self._get_owned_chat(chat_id, user_id, lock=True)
+        chat.deleted_at = utc_now()
+        self.db.commit()
 
     # GET /chats/{chat_id}
     def get_chat(
@@ -179,12 +269,7 @@ class ChatService:
         limit: int = 30,
         cursor: UUID | None = None,
     ) -> GetChatResponse:
-        chat = self.db.get(Chat, chat_id)
-        if chat is None or chat.deleted_at is not None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 채팅방을 찾을 수 없습니다.",
-            )
+        chat = self._get_owned_chat(chat_id, user_id)
 
         stmt = select(Message).where(Message.chat_id == chat_id)
 
@@ -192,10 +277,7 @@ class ChatService:
         if cursor is not None:
             cursor_msg = self.db.get(Message, cursor)
             if cursor_msg is None or cursor_msg.chat_id != chat_id:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="기준 메시지를 찾을 수 없습니다.",
-                )
+                raise CursorMessageNotFoundError()
             stmt = stmt.where(
                 (Message.created_at < cursor_msg.created_at)
                 | (
@@ -218,16 +300,7 @@ class ChatService:
             chat_id=chat.chat_id,
             chat_title=chat.title,
             current_philosopher_id=chat.current_philosopher_id,
-            messages=[
-                MessageItem(
-                    message_id=m.message_id,
-                    sender_role=m.sender_role,
-                    philosopher_id=m.philosopher_id,
-                    content=m.content,
-                    created_at=m.created_at,
-                )
-                for m in reversed(paged_messages)
-            ],
+            messages=[MessageItem.model_validate(m) for m in reversed(paged_messages)],
             has_more=has_more,
             next_cursor=next_cursor,
             created_at=chat.created_at,
