@@ -15,6 +15,13 @@ services:
     depends_on:
       mariadb:
         condition: service_healthy
+    logging:
+      driver: "local" #Docker 로그 드라이버 이름
+      options:
+        max-size: "10m"
+        max-file: "5"
+    volumes:
+      - backend_logs:/app/logs
 
   mariadb:
     image: mariadb:11
@@ -43,3 +50,5 @@ services:
 
 volumes:
   mariadb_data:
+  backend_logs:
+
