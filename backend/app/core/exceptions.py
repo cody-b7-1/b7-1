@@ -1,5 +1,6 @@
 """Application-wide exception handling."""
 
+import logging
 from collections.abc import Mapping
 from typing import cast
 
@@ -7,6 +8,8 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
+
+logger = logging.getLogger(__name__)
 
 REQUIRED_FIELD_MESSAGES: dict[str, str] = {
     "email": "이메일은 필수 입력값입니다.",
@@ -21,9 +24,13 @@ FIELD_LABELS: dict[str, tuple[str, str]] = {
 
 
 async def unhandled_exception_handler(
-    _request: Request, _error: Exception
+    _request: Request, error: Exception
 ) -> JSONResponse:
-    """Return a safe, consistent response for unexpected server errors."""
+    # 못잡은 에러에 대해 log 추가
+    logger.error(
+        "Unhandled server exception",
+        exc_info=(type(error), error, error.__traceback__),
+    )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "서버 내부 오류가 발생했습니다."},
