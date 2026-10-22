@@ -38,6 +38,34 @@ uv run alembic upgrade head
 
 마이그레이션 파일은 `alembic/versions/`에 생성되며, 적용 전 변경 사항을 검토합니다.
 
+## 5. Logging
+Python logging을 사용하여 애플리케이션 로그를 콘솔과 파일에 기록합니다.
+- 콘솔 로그: Docker local 로그 드라이버를 통해 수집 및 관리
+- 파일 로그: RotatingFileHandler를 통해 logs/app.log에 저장
+- 로그 레벨: local(DEBUG), test(WARNING), production(INFO)
+- 민감정보 보호: 비밀번호, 토큰 등 민감정보를 공통 Formatter에서 마스킹
+
+### 로그 확인
+
+Docker 콘솔 로그 확인
+```docker compose logs -f backend```
+
+파일 로그는 프로젝트 루트의 ```logs/app.log```에서 확인할 수 있습니다.
+
+*```ls -lh ./logs```
+
+### 로그 보관 정책
+
+- 파일당 최대 10MB, 백업 4개 유지
+
+- 크기 초과 시 오래된 로그 파일부터 자동 순환 삭제
+
+- Docker Bind Mount(./logs:/app/logs)를 통해 컨테이너 재생성 후에도 파일 보존
+
+- 로그 파일은 .gitignore에 등록하여 Git 추적에서 제외
+
+
+
 # 기술적 의사결정
 ## 1. 동기식 DB 연결 방식 선택
 
@@ -70,3 +98,16 @@ uv run alembic upgrade head
 트레이드오프: 마이그레이션 파일 생성·검토·적용 과정이 필요하며, 팀원 간 revision 충돌을 관리해야 함.
 
 결정: 여러 개발자가 협업하는 환경에서 DB 스키마 변경 이력을 공유하고 재현하기 위해 채택함.
+
+### 4. Authentication
+
+JWT 기반 사용자 인증 및 이메일 인증을 구현했습니다.
+
+- **회원가입:** Argon2id로 비밀번호를 해싱하여 저장하고, 이메일 중복 가입 방지
+- **이메일 인증:** 일회용 인증 토큰을 발급하고, SHA-256 해시로 저장하여 인증 완료 시 무효화
+- **로그인:** 이메일 인증 완료 여부와 비밀번호를 검증한 후 Access Token 및 Refresh Token 발급
+- **토큰 관리:** Access Token은 Bearer 방식, Refresh Token은 HttpOnly 쿠키로 전달하며 DB에는 해시로 저장
+- **토큰 갱신:** Refresh Token 검증 후 토큰 회전(Rotation) 및 기존 토큰 무효화
+- **로그아웃:** Refresh Token 무효화 및 쿠키 삭제
+- **동시성 제어:** 이메일 인증 재전송 및 Refresh Token 갱신 시 DB 잠금을 활용하여 중복 처리 방지
+- **쿠키 보안**: SameSite=Lax 설정으로 크로스 사이트 요청에서 쿠키 전송을 제한
