@@ -18,34 +18,43 @@ import { withDefaults, type ResolvedPhilosopher } from "@/lib/philosopher";
 
 type Props = {
   philosopherId: PhilosopherId;
+  initialPhilosopher?: ResolvedPhilosopher;
+  onUpdate?: (updated: ResolvedPhilosopher) => void;
   onClose: () => void;
   onStartChat: (philosopher: ResolvedPhilosopher) => void;
 };
 
 export function PhilosopherDetailDialog({
   philosopherId,
+  initialPhilosopher,
+  onUpdate,
   onClose,
   onStartChat,
 }: Props) {
-  const [philosopher, setPhilosopher] = useState<ResolvedPhilosopher | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [philosopher, setPhilosopher] = useState<ResolvedPhilosopher | null>(
+    initialPhilosopher ?? null,
+  );
+  const [loading, setLoading] = useState(!initialPhilosopher);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
 
-    setPhilosopher(null);
-    setLoading(true);
     setError("");
 
     async function loadPhilosopher() {
       try {
         const detail = await getPhilosopher(philosopherId, signal);
-        if (!signal.aborted) setPhilosopher(withDefaults(detail));
+        if (!signal.aborted) {
+          const fresh = withDefaults(detail);
+          setPhilosopher(fresh);
+          onUpdate?.(fresh);
+        }
       } catch {
         if (!signal.aborted) {
           setError("철학자 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          setPhilosopher(null);
         }
       } finally {
         if (!signal.aborted) setLoading(false);
@@ -54,7 +63,7 @@ export function PhilosopherDetailDialog({
 
     void loadPhilosopher();
     return () => controller.abort();
-  }, [philosopherId]);
+  }, [philosopherId, onUpdate]);
 
   return (
     <Dialog
@@ -108,6 +117,9 @@ export function PhilosopherDetailDialog({
                 src={philosopher.profileImageUrl}
                 alt={`${philosopher.name} 초상`}
                 className="relative w-[64%] max-w-95 md:w-[86%]"
+                onError={(event) => {
+                  event.currentTarget.hidden = true;
+                }}
               />
             </div>
 
