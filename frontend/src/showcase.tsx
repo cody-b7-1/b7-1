@@ -37,9 +37,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { PhilosopherDetailed } from "@/lib/api";
+import type { PhilosopherDetailed, PhilosopherId } from "@/lib/api";
 import { getMockResponse } from "@/lib/api.mock";
-import { type ResolvedPhilosopher, withDefaults } from "@/lib/philosopher";
+import { withDefaults } from "@/lib/philosopher";
 
 const variants = [
   "default",
@@ -86,7 +86,7 @@ function Section({
 
 function Showcase() {
   const [name, setName] = useState("");
-  const [selected, setSelected] = useState<ResolvedPhilosopher | null>(null);
+  const [selectedId, setSelectedId] = useState<PhilosopherId | null>(null);
 
   return (
     <main className="mx-auto max-w-3xl space-y-10 p-8">
@@ -233,17 +233,20 @@ function Showcase() {
 
       <Section title="PhilosopherDetailDialog">
         <div className="flex flex-wrap gap-2">
-          {[...philosophers, fallbackPhilosopher].map((p) => (
-            <Button key={p.id} variant="outline" onClick={() => setSelected(p)}>
+          {philosophers.map((p) => (
+            <Button key={p.id} variant="outline" onClick={() => setSelectedId(p.id)}>
               {p.name}
             </Button>
           ))}
         </div>
-        <PhilosopherDetailDialog
-          philosopher={selected}
-          onClose={() => setSelected(null)}
-          onStartChat={() => setSelected(null)}
-        />
+        {selectedId !== null && (
+          <PhilosopherDetailDialog
+            key={selectedId}
+            philosopherId={selectedId}
+            onClose={() => setSelectedId(null)}
+            onStartChat={() => setSelectedId(null)}
+          />
+        )}
       </Section>
 
       <Section title="AvatarGroup">
