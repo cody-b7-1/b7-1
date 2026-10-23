@@ -7,6 +7,7 @@ import {
   getMe,
   getPhilosopher,
   getPhilosopherList,
+  getPhilosopherSummaries,
   login,
   logout,
   sendMessage,
@@ -100,6 +101,14 @@ const philosopher = {
   softColor: "#222",
 };
 
+const philosopherSummary = {
+  id: 1,
+  name: "소크라테스",
+  introduction: "intro",
+  iconImageUrl: "/i.png",
+  avatarColor: "#000",
+};
+
 test("getPhilosopherList: 200이면 PhilosopherDetailed[] 반환", async () => {
   const fetch = mockFetch(200, [philosopher]);
 
@@ -144,6 +153,29 @@ test("getPhilosopherList: mock 로딩 중 중단된 요청도 AbortError로 종�
 
   await expect(result).rejects.toMatchObject({ name: "AbortError" });
   expect(fetch).not.toHaveBeenCalled();
+});
+
+test("getPhilosopherSummaries: 200이면 PhilosopherSummary[] 반환", async () => {
+  const fetch = mockFetch(200, [philosopherSummary]);
+
+  expect(await getPhilosopherSummaries()).toEqual([philosopherSummary]);
+  expect(sent(fetch)).toMatchObject({ url: "/api/philosophers/summaries", method: undefined });
+});
+
+test("getPhilosopherSummaries: 요청 중 중단하면 AbortError로 종료한다", async () => {
+  const controller = new AbortController();
+  const fetch = vi.fn((_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    }),
+  );
+  vi.stubGlobal("fetch", fetch);
+
+  const result = getPhilosopherSummaries(controller.signal);
+  controller.abort();
+
+  await expect(result).rejects.toMatchObject({ name: "AbortError" });
+  expect(fetch.mock.calls[0][1]?.signal).toBe(controller.signal);
 });
 
 test("getPhilosopher: 200이면 PhilosopherDetailed 반환", async () => {

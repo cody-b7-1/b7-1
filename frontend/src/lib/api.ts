@@ -117,7 +117,7 @@ export type PhilosopherDetailed = {
 
 export type PhilosopherSummary = Pick<
   PhilosopherDetailed,
-  "name" | "introduction" | "iconImageUrl" | "avatarColor"
+  "id" | "name" | "introduction" | "iconImageUrl" | "avatarColor"
 >;
 
 export const getPhilosopherList = (signal?: AbortSignal) =>

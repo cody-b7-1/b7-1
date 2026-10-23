@@ -66,7 +66,8 @@ const philosophers: PhilosopherDetailed[] = [
 ];
 
 const philosopherSummaries: PhilosopherSummary[] = philosophers.map(
-  ({ name, introduction, iconImageUrl, avatarColor }) => ({
+  ({ id, name, introduction, iconImageUrl, avatarColor }) => ({
+    id,
     name,
     introduction,
     iconImageUrl,
