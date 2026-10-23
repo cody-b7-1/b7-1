@@ -1,7 +1,10 @@
-from fastapi import HTTPException, status
+from typing import Annotated
+
+from fastapi import Depends
 from sqlalchemy import select
 
 from app.db.session import DBSession
+from app.philosophers.exceptions import PhilosopherNotFoundError
 from app.philosophers.models.philosopher import Philosopher
 from app.philosophers.schemas import (
     PhilosopherDetailResponse,
@@ -28,8 +31,12 @@ class PhilosopherService:
     def get_philosopher(self, philosopher_id: int) -> PhilosopherDetailResponse:
         philosopher = self.db.get(Philosopher, philosopher_id)
         if philosopher is None or not philosopher.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 철학자를 찾을 수 없습니다.",
-            )
+            raise PhilosopherNotFoundError()
         return PhilosopherDetailResponse.model_validate(philosopher)
+
+
+def get_philosopher_service(db: DBSession) -> PhilosopherService:
+    return PhilosopherService(db=db)
+
+
+PhilosopherServiceDep = Annotated[PhilosopherService, Depends(get_philosopher_service)]

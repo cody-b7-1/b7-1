@@ -15,6 +15,7 @@ from app.chats.exceptions import (
     CHAT_REQUIRED_FIELD_MESSAGES,
     ChatDomainError,
 )
+from app.philosophers.exceptions import PhilosopherDomainError
 
 REQUIRED_FIELD_MESSAGES: dict[str, str] = {
     "email": "이메일은 필수 입력값입니다.",
@@ -34,6 +35,16 @@ async def chat_domain_error_handler(
     _request: Request, error: ChatDomainError
 ) -> JSONResponse:
     """Return a consistent JSON response for chat domain business errors."""
+    return JSONResponse(
+        status_code=error.status_code,
+        content={"detail": error.detail},
+    )
+
+
+async def philosopher_domain_error_handler(
+    _request: Request, error: PhilosopherDomainError
+) -> JSONResponse:
+    """Return a consistent JSON response for philosopher domain business errors."""
     return JSONResponse(
         status_code=error.status_code,
         content={"detail": error.detail},
@@ -114,19 +125,19 @@ def _validation_error_message(validation_error: Mapping[str, object]) -> str:
 
     if field and error_type == "less_than_equal":
         label, particle = field
-        return f"{label}{particle} 최대 {context['le']} 이하이어야 합니다."
+        return f"{label}{particle} 최대 {context['le']} 이하여야 합니다."
 
     if error_type == "uuid_parsing":
         if field:
             label, particle = field
             return f"{label}{particle} 올바른 UUID 형식이어야 합니다."
-        return "올바른 UUID 형식이 아닙니다."
+        return "올바른 UUID 형식이어야 합니다."
 
     if error_type in ("int_parsing", "int_type"):
         if field:
             label, particle = field
             return f"{label}{particle} 숫자 형식이어야 합니다."
-        return "올바른 숫자 형식이 아닙니다."
+        return "올바른 숫자 형식이어야 합니다."
 
     return str(validation_error.get("msg", ""))
 
@@ -137,6 +148,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         ChatDomainError,
         cast(ExceptionHandler, chat_domain_error_handler),
+    )
+    app.add_exception_handler(
+        PhilosopherDomainError,
+        cast(ExceptionHandler, philosopher_domain_error_handler),
     )
     app.add_exception_handler(
         RequestValidationError,
