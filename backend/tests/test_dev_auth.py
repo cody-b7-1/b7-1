@@ -8,20 +8,18 @@ from uuid import uuid4
 os.environ["APP_ENV"] = "local"
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
-from jwt.exceptions import InvalidTokenError
-from starlette.responses import Response
-
 from app.auth.models.refresh_token import RefreshToken
 from app.auth.models.user import User
 from app.auth.security import (
     create_access_token,
     create_refresh_token,
-    verify_refresh_token_hash,
     verify_access_token,
     verify_refresh_token,
+    verify_refresh_token_hash,
 )
 from app.dev.router import DEV_USER_EMAIL, issue_dev_access_token
-from app.main import app
+from jwt.exceptions import InvalidTokenError
+from starlette.responses import Response
 
 
 class FakeSession:
@@ -94,6 +92,9 @@ class DevAuthTests(unittest.TestCase):
         self.assertLessEqual(
             abs(expires_at - (datetime.now(UTC) + timedelta(days=7))),
             timedelta(seconds=2),
+        )
+        self.assertEqual(
+            verify_refresh_token(refresh_token)["sub"], str(db.user.user_id)
         )
         refresh_payload = verify_refresh_token(refresh_token)
         self.assertEqual(refresh_payload["sub"], str(db.user.user_id))

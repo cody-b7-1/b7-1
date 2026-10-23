@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import patch
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 from uuid import uuid4
@@ -74,7 +75,8 @@ class AuthServiceTests(unittest.TestCase):
             else None,
         )
 
-    def test_create_user_hashes_password_and_persists_user(self) -> None:
+    @patch("app.auth.service.logger")
+    def test_create_user_hashes_password_and_persists_user(self, logger) -> None:
         db = FakeSession()
         request = SignUpRequest(
             email="User@Example.com",
@@ -90,6 +92,7 @@ class AuthServiceTests(unittest.TestCase):
         self.assertEqual(user.nickname, request.nickname)
         self.assertLessEqual(len(user.password_hash), 255)
         self.assertTrue(verify_password(request.password, user.password_hash))
+        logger.info.assert_called_once_with("회원가입에 성공했습니다.")
 
     def test_create_user_maps_only_active_email_constraint_to_duplicate_error(
         self,
@@ -187,6 +190,7 @@ class AuthServiceTests(unittest.TestCase):
             patch(
                 "app.auth.service.create_access_token", return_value="access-token"
             ) as access,
+            patch("app.auth.service.logger") as logger,
         ):
             tokens = login_user(db, request)
 
@@ -194,6 +198,7 @@ class AuthServiceTests(unittest.TestCase):
         authenticate.assert_called_once_with(db, request)
         issue.assert_called_once_with(db, user)
         access.assert_called_once_with(user.user_id)
+        logger.info.assert_called_once_with("로그인에 성공했습니다.")
 
     def test_rotate_refresh_token_atomically_replaces_stored_token(self) -> None:
         user = self._login_user()
@@ -230,7 +235,10 @@ class AuthServiceTests(unittest.TestCase):
         db.add.assert_not_called()
         db.commit.assert_not_called()
 
-    def test_authenticate_user_rejects_unverified_account_separately(self) -> None:
+    @patch("app.auth.service.logger")
+    def test_authenticate_user_rejects_unverified_account_separately(
+        self, logger
+    ) -> None:
         db = Mock()
         db.scalar.return_value = self._login_user(verified=False)
         request = LoginRequest(email="user@example.com", password="password123!")
@@ -238,7 +246,13 @@ class AuthServiceTests(unittest.TestCase):
         with self.assertRaises(EmailNotVerifiedError):
             authenticate_user(db, request)
 
-    def test_authenticate_user_rejects_nonexistent_email(self) -> None:
+        logger.debug.assert_called_once_with(
+            "이메일 인증이 완료되지 않아 로그인에 실패했습니다."
+        )
+        logger.warning.assert_not_called()
+
+    @patch("app.auth.service.logger")
+    def test_authenticate_user_rejects_nonexistent_email(self, logger) -> None:
         db = Mock()
         db.scalar.return_value = None
         request = LoginRequest(email="missing@example.com", password="password123!")
@@ -246,13 +260,20 @@ class AuthServiceTests(unittest.TestCase):
         with self.assertRaises(EmailNotFoundError):
             authenticate_user(db, request)
 
-    def test_authenticate_user_rejects_mismatched_password(self) -> None:
+        logger.warning.assert_called_once_with("로그인 인증에 실패했습니다.")
+        logger.debug.assert_not_called()
+
+    @patch("app.auth.service.logger")
+    def test_authenticate_user_rejects_mismatched_password(self, logger) -> None:
         db = Mock()
         db.scalar.return_value = self._login_user()
         request = LoginRequest(email="user@example.com", password="incorrect-password!")
 
         with self.assertRaises(PasswordMismatchError):
             authenticate_user(db, request)
+
+        logger.warning.assert_called_once_with("로그인 인증에 실패했습니다.")
+        logger.debug.assert_not_called()
 
 
 if __name__ == "__main__":
