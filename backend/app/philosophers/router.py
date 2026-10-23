@@ -4,7 +4,7 @@ from fastapi import APIRouter, Path, status
 
 from app.philosophers.schemas import (
     PhilosopherDetailResponse,
-    PhilosopherListItem,
+    PhilosopherSummaryResponse,
 )
 from app.philosophers.service import PhilosopherServiceDep
 
@@ -22,15 +22,28 @@ PhilosopherIdPath = Annotated[
 
 @router.get(
     "",
-    response_model=list[PhilosopherListItem],
+    response_model=list[PhilosopherDetailResponse],
     status_code=status.HTTP_200_OK,
-    summary="철학자 목록 조회",
-    description="활성화된 철학자 목록을 조회합니다.",
+    summary="철학자 전체 목록 조회",
+    description="활성화된 모든 철학자의 전체 상세 정보를 조회합니다.",
 )
 def list_philosophers(
     service: PhilosopherServiceDep,
-) -> list[PhilosopherListItem]:
+) -> list[PhilosopherDetailResponse]:
     return service.list_philosophers()
+
+
+@router.get(
+    "/summaries",
+    response_model=list[PhilosopherSummaryResponse],
+    status_code=status.HTTP_200_OK,
+    summary="철학자 요약 목록 조회",
+    description="활성화된 철학자의 요약 목록(id, 이름, 소개문구, 아이콘, 아바타 색상)을 조회합니다.",
+)
+def list_philosopher_summaries(
+    service: PhilosopherServiceDep,
+) -> list[PhilosopherSummaryResponse]:
+    return service.list_philosopher_summaries()
 
 
 @router.get(
