@@ -1,8 +1,7 @@
-import type { PhilosopherBrief, PhilosopherDetailed } from "@/lib/api";
+import type { PhilosopherDetailed } from "@/lib/api";
 
 type NonNull<T> = { [K in keyof T]: NonNullable<T[K]> };
 export type ResolvedPhilosopher = NonNull<PhilosopherDetailed>;
-export type ResolvedPhilosopherBrief = NonNull<PhilosopherBrief>;
 
 const DEFAULTS = {
   description: "",
@@ -23,12 +22,4 @@ export const withDefaults = (p: PhilosopherDetailed): ResolvedPhilosopher => ({
   avatarColor: p.avatarColor ?? DEFAULTS.avatarColor,
   inkColor: p.inkColor ?? DEFAULTS.inkColor,
   softColor: p.softColor ?? DEFAULTS.softColor,
-});
-
-export const withBriefDefaults = (
-  p: PhilosopherBrief,
-): NonNull<PhilosopherBrief> => ({
-  ...p,
-  description: p.description ?? DEFAULTS.description,
-  profileImageUrl: p.profileImageUrl ?? DEFAULTS.profileImageUrl,
 });

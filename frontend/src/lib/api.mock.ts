@@ -5,8 +5,8 @@ import {
   type CursorPage,
   type Message,
   type MessageBody,
-  type PhilosopherBrief,
   type PhilosopherDetailed,
+  type PhilosopherSummary,
   type SendMessageResponse,
   type StartChatResponse,
   type User,
@@ -65,12 +65,12 @@ const philosophers: PhilosopherDetailed[] = [
   },
 ];
 
-const philosopherBriefs: PhilosopherBrief[] = philosophers.map(
-  ({ id, name, description, profileImageUrl }) => ({
-    id,
+const philosopherSummaries: PhilosopherSummary[] = philosophers.map(
+  ({ name, introduction, iconImageUrl, avatarColor }) => ({
     name,
-    description,
-    profileImageUrl,
+    introduction,
+    iconImageUrl,
+    avatarColor,
   }),
 );
 
@@ -183,7 +183,10 @@ export function getMockResponse(method: string, path: string, body?: unknown): u
   if (method === "POST" && pathname === "/auth/logout") return null;
   if (method === "GET" && pathname === "/auth/me") return user;
 
-  if (method === "GET" && pathname === "/philosophers") return philosopherBriefs;
+  if (method === "GET" && pathname === "/philosophers") return philosophers;
+  if (method === "GET" && pathname === "/philosophers/summaries") {
+    return philosopherSummaries;
+  }
 
   const matchedIds = pathname.match(/^\/philosophers\/(\d+)$/);
   if (method === "GET" && matchedIds) {
