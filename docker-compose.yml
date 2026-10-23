@@ -1,3 +1,16 @@
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# DB는 로그량이 적으므로 작게 설정
+x-logging-db: &db-logging
+  driver: local
+  options:
+    max-size: "5m"
+    max-file: "3"
+
 services:
   backend:
     build:
@@ -15,11 +28,7 @@ services:
     depends_on:
       mariadb:
         condition: service_healthy
-    logging:
-      driver: "local" #Docker 로그 드라이버 이름
-      options:
-        max-size: "10m"
-        max-file: "5"
+    logging: *default-logging
     volumes:
       - ./logs:/app/logs
 
@@ -37,6 +46,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+    logging: *db-logging
     volumes:
       - mariadb_data:/var/lib/mysql
 
@@ -45,6 +55,7 @@ services:
       context: ./frontend
     ports:
       - 443:443
+    logging: *default-logging
     volumes:
       - ./infra/caddy:/etc/caddy:ro
 
