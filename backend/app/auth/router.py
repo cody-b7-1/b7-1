@@ -15,7 +15,11 @@ from app.auth.dependencies import (
     get_optional_refresh_token,
     get_required_refresh_token,
 )
-from app.auth.email import deliver_email_verification_email
+from app.auth.email import (
+    EmailDeliveryError,
+    deliver_email_verification_email,
+    validate_smtp_settings,
+)
 from app.auth.schemas import (
     CurrentUserResponse,
     EmailSendRequest,
@@ -230,6 +234,14 @@ def login(
 def send_email_verification_link(
     request: EmailSendRequest, background_tasks: BackgroundTasks, db: DBSession
 ) -> None:
+
+    try:
+        validate_smtp_settings()
+    except EmailDeliveryError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="이메일 발송 서비스를 사용할 수 없습니다.",
+        ) from None
 
     result = create_email_verification(db, str(request.email))
 

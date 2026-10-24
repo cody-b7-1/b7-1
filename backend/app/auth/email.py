@@ -12,11 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class EmailDeliveryError(Exception):
-    """Raised when an email verification message cannot be delivered."""
+    """email 전송 실패 시"""
 
 
-def send_email_verification_email(email: str, token: str) -> None:
-    """Send the frontend verification URL to an account email address."""
+def validate_smtp_settings() -> None:
     if (
         not settings.smtp_host
         or not settings.smtp_username
@@ -24,6 +23,11 @@ def send_email_verification_email(email: str, token: str) -> None:
     ):
         raise EmailDeliveryError("SMTP 설정이 완료되지 않았습니다.")
 
+
+def send_email_verification_email(email: str, token: str) -> None:
+
+    # email 전송
+    validate_smtp_settings()
     verification_url = (
         f"{settings.frontend_url.rstrip('/')}/verify-email?"
         f"{urlencode({'token': token})}"
