@@ -11,7 +11,7 @@ export function NotFoundPage() {
       <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
         페이지를 찾을 수 없습니다
       </h1>
-      <p className="mt-4 max-w-md text-base text-muted-foreground">
+      <p className="mt-4 text-base text-muted-foreground break-keep">
         요청하신 페이지가 존재하지 않거나, 주소가 잘못 입력되었을 수 있습니다.
       </p>
       <div className="mt-8">
