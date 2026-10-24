@@ -1,11 +1,13 @@
 import logging
 from datetime import UTC, datetime, timedelta
+from secrets import token_urlsafe
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.auth.models.email_verification import EmailVerification
 from app.auth.models.refresh_token import RefreshToken
 from app.auth.models.user import Role, User
 from app.auth.schemas import LoginRequest, SignUpRequest
@@ -13,6 +15,7 @@ from app.auth.security import (
     RefreshTokenPayload,
     create_access_token,
     create_refresh_token,
+    hash_email_verification_token,
     hash_password,
     hash_refresh_token,
     verify_password,
@@ -44,6 +47,18 @@ class EmailNotVerifiedError(Exception):
     pass
 
 
+class EmailUserNotFoundError(Exception):
+    """이메일 인증을 요청한 사용자가 존재하지 않을 때 발생합니다."""
+
+
+class EmailAlreadyVerifiedError(Exception):
+    """이미 이메일 인증을 완료한 사용자일 때 발생합니다."""
+
+
+class InvalidEmailVerificationTokenError(Exception):
+    """이메일 인증 토큰이 만료·사용되었거나 유효하지 않을 때 발생합니다."""
+
+
 class InvalidRefreshTokenError(Exception):
     pass
 
@@ -73,6 +88,119 @@ def create_user(db: Session, request: SignUpRequest) -> User:
 
     logger.info("회원가입에 성공했습니다.")
     return user
+
+
+def create_email_verification(db: Session, email: str) -> tuple[str, str]:
+
+    # 사용자 조회 + 잠금
+    user = db.scalar(
+        select(User)
+        .where(
+            User.email == email.lower(),
+            User.deleted_at.is_(None),
+        )
+        .with_for_update()
+    )
+
+    if user is None:
+        db.rollback()
+        raise EmailUserNotFoundError
+
+    if user.email_verified_at is not None:
+        db.rollback()
+        raise EmailAlreadyVerifiedError
+
+    # 새로운 토큰 생성
+    token = token_urlsafe(32)
+
+    expires_at = (
+        datetime.now(UTC) + timedelta(hours=settings.email_verification_expire_hours)
+    ).replace(tzinfo=None)
+
+    # email verification 생성
+    verification = EmailVerification(
+        verification_id=uuid4(),
+        user_id=user.user_id,
+        token_hash=hash_email_verification_token(token),
+        expires_at=expires_at,
+    )
+
+    db.add(verification)
+
+    user_email = user.email
+    db.commit()
+
+    return user_email, token
+
+
+def verify_email_verification_token(db: Session, token: str) -> None:
+    try:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        token_hash = hash_email_verification_token(token)
+
+        # 1. 잠금 없이 해당 토큰 식별, 사용자 찾기
+        matched = db.scalar(
+            select(EmailVerification).where(
+                EmailVerification.token_hash == token_hash,
+                EmailVerification.expires_at > now,
+            )
+        )
+
+        if matched is None:
+            raise InvalidEmailVerificationTokenError
+
+        # 2. 사용자 행 잠금
+        user = db.scalar(
+            select(User)
+            .where(User.user_id == matched.user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+        if (
+            user is None
+            or user.deleted_at is not None
+            or user.email_verified_at is not None
+        ):
+            raise InvalidEmailVerificationTokenError
+
+        # 3. 잠금 획득 후 토큰 재확인
+        now = datetime.now(UTC).replace(tzinfo=None)
+
+        verification = db.scalar(
+            select(EmailVerification)
+            .where(
+                EmailVerification.verification_id == matched.verification_id,
+                EmailVerification.token_hash == token_hash,
+                EmailVerification.expires_at > now,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+        if verification is None:
+            raise InvalidEmailVerificationTokenError
+
+        # 4. 인증 완료
+        user.email_verified_at = now
+
+        # 5. 관련된 해당 사용자의 모든 인증 토큰 삭제
+        db.execute(
+            delete(EmailVerification).where(EmailVerification.user_id == user.user_id)
+        )
+
+        db.commit()
+        logger.info("이메일 인증이 완료되었습니다.")
+
+    except InvalidEmailVerificationTokenError:
+        db.rollback()
+        logger.warning(
+            "유효하지 않거나 만료된 이메일 인증 토큰으로 인증을 시도했습니다."
+        )
+        raise
+    except Exception:
+        db.rollback()
+        raise
 
 
 def authenticate_user(db: Session, request: LoginRequest) -> User:
@@ -140,8 +268,9 @@ def login_user(db: Session, request: LoginRequest) -> tuple[str, str]:
     user = authenticate_user(db, request)
 
     # refresh token, access token 생성
-    refresh_token = issue_refresh_token(db, user)
     access_token = create_access_token(user.user_id)
+    refresh_token = issue_refresh_token(db, user)
+
     logger.info("로그인에 성공했습니다.")
     return access_token, refresh_token
 

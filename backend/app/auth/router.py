@@ -1,12 +1,25 @@
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Response,
+    status,
+)
+from starlette.concurrency import run_in_threadpool
 
 from app.auth.dependencies import (
     CurrentUser,
     get_optional_refresh_token,
     get_required_refresh_token,
+)
+from app.auth.email import (
+    EmailDeliveryError,
+    deliver_email_verification_email,
+    validate_smtp_settings,
 )
 from app.auth.schemas import (
     CurrentUserResponse,
@@ -19,14 +32,19 @@ from app.auth.schemas import (
 from app.auth.security import RefreshTokenPayload
 from app.auth.service import (
     EmailAlreadyRegisteredError,
+    EmailAlreadyVerifiedError,
     EmailNotFoundError,
     EmailNotVerifiedError,
+    EmailUserNotFoundError,
+    InvalidEmailVerificationTokenError,
     InvalidRefreshTokenError,
     PasswordMismatchError,
+    create_email_verification,
     create_user,
     login_user,
     revoke_refresh_token,
     rotate_refresh_token,
+    verify_email_verification_token,
 )
 from app.core.config import settings
 from app.db.session import DBSession
@@ -93,11 +111,15 @@ def get_me(
     summary="회원가입",
     description=(
         "이메일 주소와 비밀번호로 계정을 생성하고 생성된 사용자의 이메일 주소와 "
-        "닉네임을 반환합니다."
+        "닉네임을 반환합니다. 인증 메일은 응답 후 백그라운드에서 전송하며, SMTP "
+        "전송 실패는 로그로 기록되고 이미 생성된 회원가입 응답에는 영향을 주지 않습니다."
     ),
     responses={
         status.HTTP_201_CREATED: {
-            "description": "회원가입에 성공하여 생성된 사용자 정보를 반환합니다.",
+            "description": (
+                "회원가입에 성공하여 생성된 사용자 정보를 반환하고 인증 메일 전송을 "
+                "예약했습니다. 이후 SMTP 전송 실패 여부와 관계없이 이 응답을 유지합니다."
+            ),
         },
         status.HTTP_409_CONFLICT: {
             "description": "삭제되지 않은 계정에 이미 등록된 이메일 주소입니다.",
@@ -115,6 +137,7 @@ def get_me(
 )
 def sign_up(
     request: SignUpRequest,
+    background_tasks: BackgroundTasks,
     db: DBSession,
 ) -> SignUpResponse:
     try:
@@ -187,17 +210,23 @@ def login(
 
 @router.post(
     "/email/send",
-    status_code=status.HTTP_202_ACCEPTED,
+    status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     response_class=Response,
     summary="이메일 인증 링크 발송",
     description=(
-        "이메일 인증 링크 발송 요청을 접수합니다. 계정 존재 여부나 기존 인증 여부와 관계없이 "
-        "동일한 응답을 반환합니다."
+        "이메일 인증 토큰을 생성·저장하고 SMTP로 인증 링크를 전송합니다. "
+        "SMTP 전송 결과를 확인한 후 응답합니다."
     ),
     responses={
-        status.HTTP_202_ACCEPTED: {
-            "description": "이메일 인증 링크 발송 요청을 접수했습니다.",
+        status.HTTP_204_NO_CONTENT: {
+            "description": "이메일 인증 링크를 SMTP로 전송했습니다.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "등록된 사용자를 찾을 수 없습니다.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "이미 이메일 인증이 완료된 사용자입니다.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "이메일이 누락되었거나 형식이 올바르지 않습니다.",
@@ -205,10 +234,45 @@ def login(
         status.HTTP_429_TOO_MANY_REQUESTS: {
             "description": "이메일 인증 링크 발송 요청 한도를 초과했습니다.",
         },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "SMTP 설정이 누락되었거나 SMTP 연결·인증·전송에 실패했습니다.",
+        },
     },
 )
-def send_email_verification_link(request: EmailSendRequest) -> None:
-    return
+async def send_email_verification_link(
+    request: EmailSendRequest, db: DBSession
+) -> None:
+
+    try:
+        validate_smtp_settings()
+    except EmailDeliveryError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="이메일 발송 서비스를 사용할 수 없습니다.",
+        ) from None
+
+    try:
+        email, token = await run_in_threadpool(
+            create_email_verification, db, str(request.email)
+        )
+    except EmailUserNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="등록된 사용자를 찾을 수 없습니다.",
+        ) from None
+    except EmailAlreadyVerifiedError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 이메일 인증이 완료되었습니다.",
+        ) from None
+
+    try:
+        await deliver_email_verification_email(email, token)
+    except EmailDeliveryError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="이메일 발송 서비스를 사용할 수 없습니다.",
+        ) from None
 
 
 @router.post(
@@ -219,11 +283,15 @@ def send_email_verification_link(request: EmailSendRequest) -> None:
     summary="이메일 인증 토큰 검증",
     description=(
         "프런트엔드가 인증 링크에 포함된 토큰을 요청 본문으로 전송하면 해당 토큰을 "
-        "검증합니다."
+        "검증합니다. 인증 성공 시 해당 사용자의 이메일 인증 토큰을 모두 무효화하여 "
+        "재사용할 수 없게 합니다."
     ),
     responses={
         status.HTTP_204_NO_CONTENT: {
-            "description": "이메일 인증에 성공했습니다.",
+            "description": (
+                "이메일 인증에 성공했으며 해당 사용자의 모든 이메일 인증 토큰을 "
+                "무효화했습니다."
+            ),
         },
         status.HTTP_400_BAD_REQUEST: {
             "description": "토큰이 올바르지 않거나 만료·사용·무효화되었습니다.",
@@ -236,8 +304,16 @@ def send_email_verification_link(request: EmailSendRequest) -> None:
         },
     },
 )
-def verify_email_link_token(request: EmailVerifyRequest) -> None:
-    return
+def verify_email_link_token(request: EmailVerifyRequest, db: DBSession) -> None:
+    """이메일 인증 토큰을 사용하고 계정을 인증 완료 상태로 변경합니다."""
+    try:
+        # 토큰 검증
+        verify_email_verification_token(db, request.token)
+    except InvalidEmailVerificationTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="토큰이 올바르지 않거나 만료·사용·무효화되었습니다.",
+        ) from None
 
 
 @router.post(
