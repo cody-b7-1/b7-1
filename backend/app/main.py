@@ -7,8 +7,11 @@ from app.auth.router import router as auth_router
 from app.chats.router import router as chats_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
+from app.core.logging import setup_logging
 from app.db import model_registry as _model_registry  # noqa: F401
 from app.philosophers.router import router as philosophers_router
+
+setup_logging()
 
 
 class HealthResponse(BaseModel):

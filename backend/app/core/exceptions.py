@@ -1,5 +1,6 @@
 """Application-wide exception handling."""
 
+import logging
 from collections.abc import Mapping
 from typing import cast
 
@@ -8,11 +9,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
 
+logger = logging.getLogger(__name__)
 from app.chats.exceptions import (
     CHAT_FIELD_LABELS,
     CHAT_REQUIRED_FIELD_MESSAGES,
     ChatDomainError,
 )
+from app.philosophers.exceptions import PhilosopherDomainError
 
 REQUIRED_FIELD_MESSAGES: dict[str, str] = {
     "email": "이메일은 필수 입력값입니다.",
@@ -38,10 +41,24 @@ async def chat_domain_error_handler(
     )
 
 
-async def unhandled_exception_handler(
-    _request: Request, _error: Exception
+async def philosopher_domain_error_handler(
+    _request: Request, error: PhilosopherDomainError
 ) -> JSONResponse:
-    """Return a safe, consistent response for unexpected server errors."""
+    """Return a consistent JSON response for philosopher domain business errors."""
+    return JSONResponse(
+        status_code=error.status_code,
+        content={"detail": error.detail},
+    )
+
+
+async def unhandled_exception_handler(
+    _request: Request, error: Exception
+) -> JSONResponse:
+    # 못잡은 에러에 대해 log 추가
+    logger.error(
+        "처리되지 않은 서버 예외가 발생했습니다.",
+        exc_info=(type(error), error, error.__traceback__),
+    )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "서버 내부 오류가 발생했습니다."},
@@ -108,19 +125,19 @@ def _validation_error_message(validation_error: Mapping[str, object]) -> str:
 
     if field and error_type == "less_than_equal":
         label, particle = field
-        return f"{label}{particle} 최대 {context['le']} 이하이어야 합니다."
+        return f"{label}{particle} 최대 {context['le']} 이하여야 합니다."
 
     if error_type == "uuid_parsing":
         if field:
             label, particle = field
             return f"{label}{particle} 올바른 UUID 형식이어야 합니다."
-        return "올바른 UUID 형식이 아닙니다."
+        return "올바른 UUID 형식이어야 합니다."
 
     if error_type in ("int_parsing", "int_type"):
         if field:
             label, particle = field
             return f"{label}{particle} 숫자 형식이어야 합니다."
-        return "올바른 숫자 형식이 아닙니다."
+        return "올바른 숫자 형식이어야 합니다."
 
     return str(validation_error.get("msg", ""))
 
@@ -131,6 +148,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         ChatDomainError,
         cast(ExceptionHandler, chat_domain_error_handler),
+    )
+    app.add_exception_handler(
+        PhilosopherDomainError,
+        cast(ExceptionHandler, philosopher_domain_error_handler),
     )
     app.add_exception_handler(
         RequestValidationError,

@@ -51,21 +51,41 @@
 | 채팅 | 현재 철학자, 대화 내역, 메시지 입력·전송, 철학자 전환 |
 
 ### 메인·철학자 소개
-![메인·철학자 소개](./01-main.png)
+![메인·철학자 소개](./images/01-main.png)
 
 ### 로그인
-![로그인](./02-login.png)
+![로그인](./images/02-login.png)
 
 ### 회원가입
-![회원가입](./03-signup.png)
+![회원가입](./images/03-signup.png)
 
 ### 이메일 인증 성공
-![이메일 인증 성공](./04-verify-success.png)
+![이메일 인증 성공](./images/04-verify-success.png)
 
 ### 이메일 인증 실패
-![이메일 인증 실패](./05-verify-fail.png)
+![이메일 인증 실패](./images/05-verify-fail.png)
 
 ### 채팅
-![채팅](./06-chat.png)
+![채팅](./images/06-chat.png)
+
+### 모달 화면 — 에라스무스
+
+![에라스무스 모달](./images/02-modal-erasmus.png)
+
+### 모달 화면 — 쇼펜하우어
+
+![쇼펜하우어 모달](./images/03-modal-schopenhauer.png)
+
+### 모달 화면 — 니체
+
+![니체 모달](./images/04-modal-nietzsche.png)
+
+### 모달 화면 — 에픽테토스
+
+![에픽테토스 모달](./images/05-modal-epictetus.png)
+
+### 모달 화면 — 모바일
+
+![모바일 모달](./images/06-modal-mobile.png)
 
 ※ 디자인 시안이며, 실제 API 연결 전 화면입니다.

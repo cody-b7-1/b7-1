@@ -71,5 +71,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Backend logs persisted by Docker Compose
+/logs/
+
 # Frontend local env files
 .env*.local

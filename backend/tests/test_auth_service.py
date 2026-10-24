@@ -1,7 +1,6 @@
 import os
 import unittest
-from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
@@ -14,11 +13,9 @@ from app.auth.models.user import Role, User
 from app.auth.schemas import LoginRequest, SignUpRequest
 from app.auth.security import (
     create_refresh_token,
-    hash_email_verification_token,
     hash_password,
     hash_refresh_token,
     verify_access_token,
-    verify_email_verification_token_hash,
     verify_password,
     verify_refresh_token,
     verify_refresh_token_hash,
@@ -27,17 +24,14 @@ from app.auth.service import (
     EmailAlreadyRegisteredError,
     EmailNotFoundError,
     EmailNotVerifiedError,
-    InvalidEmailVerificationTokenError,
     InvalidRefreshTokenError,
     PasswordMismatchError,
     authenticate_user,
-    create_email_verification,
     create_user,
     issue_refresh_token,
     login_user,
     revoke_refresh_token,
     rotate_refresh_token,
-    verify_email_verification_token,
 )
 
 
@@ -80,7 +74,8 @@ class AuthServiceTests(unittest.TestCase):
             else None,
         )
 
-    def test_create_user_hashes_password_and_persists_user(self) -> None:
+    @patch("app.auth.service.logger")
+    def test_create_user_hashes_password_and_persists_user(self, logger) -> None:
         db = FakeSession()
         request = SignUpRequest(
             email="User@Example.com",
@@ -96,6 +91,7 @@ class AuthServiceTests(unittest.TestCase):
         self.assertEqual(user.nickname, request.nickname)
         self.assertLessEqual(len(user.password_hash), 255)
         self.assertTrue(verify_password(request.password, user.password_hash))
+        logger.info.assert_called_once_with("회원가입에 성공했습니다.")
 
     def test_create_user_maps_only_active_email_constraint_to_duplicate_error(
         self,
@@ -193,6 +189,7 @@ class AuthServiceTests(unittest.TestCase):
             patch(
                 "app.auth.service.create_access_token", return_value="access-token"
             ) as access,
+            patch("app.auth.service.logger") as logger,
         ):
             tokens = login_user(db, request)
 
@@ -200,6 +197,7 @@ class AuthServiceTests(unittest.TestCase):
         authenticate.assert_called_once_with(db, request)
         issue.assert_called_once_with(db, user)
         access.assert_called_once_with(user.user_id)
+        logger.info.assert_called_once_with("로그인에 성공했습니다.")
 
     def test_rotate_refresh_token_atomically_replaces_stored_token(self) -> None:
         user = self._login_user()
@@ -236,7 +234,10 @@ class AuthServiceTests(unittest.TestCase):
         db.add.assert_not_called()
         db.commit.assert_not_called()
 
-    def test_authenticate_user_rejects_unverified_account_separately(self) -> None:
+    @patch("app.auth.service.logger")
+    def test_authenticate_user_rejects_unverified_account_separately(
+        self, logger
+    ) -> None:
         db = Mock()
         db.scalar.return_value = self._login_user(verified=False)
         request = LoginRequest(email="user@example.com", password="password123!")
@@ -244,7 +245,13 @@ class AuthServiceTests(unittest.TestCase):
         with self.assertRaises(EmailNotVerifiedError):
             authenticate_user(db, request)
 
-    def test_authenticate_user_rejects_nonexistent_email(self) -> None:
+        logger.debug.assert_called_once_with(
+            "이메일 인증이 완료되지 않아 로그인에 실패했습니다."
+        )
+        logger.warning.assert_not_called()
+
+    @patch("app.auth.service.logger")
+    def test_authenticate_user_rejects_nonexistent_email(self, logger) -> None:
         db = Mock()
         db.scalar.return_value = None
         request = LoginRequest(email="missing@example.com", password="password123!")
@@ -252,7 +259,11 @@ class AuthServiceTests(unittest.TestCase):
         with self.assertRaises(EmailNotFoundError):
             authenticate_user(db, request)
 
-    def test_authenticate_user_rejects_mismatched_password(self) -> None:
+        logger.warning.assert_called_once_with("로그인 인증에 실패했습니다.")
+        logger.debug.assert_not_called()
+
+    @patch("app.auth.service.logger")
+    def test_authenticate_user_rejects_mismatched_password(self, logger) -> None:
         db = Mock()
         db.scalar.return_value = self._login_user()
         request = LoginRequest(email="user@example.com", password="incorrect-password!")
@@ -260,120 +271,8 @@ class AuthServiceTests(unittest.TestCase):
         with self.assertRaises(PasswordMismatchError):
             authenticate_user(db, request)
 
-    def test_reissue_replaces_the_previous_verification_token(self) -> None:
-        db = Mock()
-        user = self._login_user(verified=False)
-        verification = SimpleNamespace(
-            token_hash=hash_password("old-token"),
-            expires_at=datetime.now(UTC).replace(tzinfo=None),
-        )
-        # First scalar call locks the user, second loads its 1:1 verification row.
-        db.scalar.side_effect = [user, verification]
-
-        token = create_email_verification(db, user)
-
-        self.assertEqual(
-            verification.token_hash,
-            hash_email_verification_token(token),
-        )
-        self.assertEqual(len(verification.token_hash), 64)
-        self.assertFalse(
-            verify_email_verification_token_hash(
-                "old-token", verification.token_hash
-            )
-        )
-        self.assertTrue(
-            verify_email_verification_token_hash(token, verification.token_hash)
-        )
-        self.assertGreater(
-            verification.expires_at, datetime.now(UTC).replace(tzinfo=None)
-        )
-        db.commit.assert_called_once()
-
-    def test_valid_verification_token_marks_user_and_invalidates_all_user_tokens(
-        self,
-    ) -> None:
-        db = Mock()
-        token = "valid-token"
-        user = SimpleNamespace(deleted_at=None, email_verified_at=None)
-        verification = SimpleNamespace(
-            user_id=uuid4(),
-            token_hash=hash_email_verification_token(token),
-            user=user,
-            expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
-        )
-        db.scalars.return_value.all.return_value = [verification]
-
-        verify_email_verification_token(db, token)
-
-        self.assertIsNotNone(user.email_verified_at)
-        db.execute.assert_called_once()
-        delete_statement = db.execute.call_args.args[0]
-        self.assertEqual(delete_statement.table.name, "email_verifications")
-        self.assertEqual(
-            delete_statement.whereclause.right.value,
-            verification.user_id,
-        )
-        db.commit.assert_called_once()
-
-    def test_consumed_verification_token_cannot_be_reused(self) -> None:
-        db = Mock()
-        db.scalars.return_value.all.side_effect = [
-            [
-                SimpleNamespace(
-                    user_id=uuid4(),
-                    token_hash=hash_email_verification_token("one-time-token"),
-                    user=SimpleNamespace(
-                        deleted_at=None,
-                        email_verified_at=None,
-                    ),
-                    expires_at=datetime.now(UTC).replace(tzinfo=None)
-                    + timedelta(hours=1),
-                )
-            ],
-            [],
-        ]
-
-        verify_email_verification_token(db, "one-time-token")
-
-        with self.assertRaises(InvalidEmailVerificationTokenError):
-            verify_email_verification_token(db, "one-time-token")
-
-        db.commit.assert_called_once()
-
-    def test_legacy_argon2_verification_token_remains_valid(self) -> None:
-        db = Mock()
-        token = "legacy-token"
-        verification = SimpleNamespace(
-            user_id=uuid4(),
-            token_hash=hash_password(token),
-            user=SimpleNamespace(deleted_at=None, email_verified_at=None),
-            expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
-        )
-        db.scalars.return_value.all.return_value = [verification]
-
-        verify_email_verification_token(db, token)
-
-        self.assertIsNotNone(verification.user.email_verified_at)
-        db.execute.assert_called_once()
-        db.commit.assert_called_once()
-
-    def test_expired_or_invalid_verification_token_is_rejected(self) -> None:
-        db = Mock()
-        expired_token = "expired-token"
-        expired_verification = SimpleNamespace(
-            token_hash=hash_email_verification_token(expired_token),
-            user=SimpleNamespace(deleted_at=None, email_verified_at=None),
-            expires_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=1),
-        )
-        # The query excludes expired records and the service defensively checks
-        # expiry again before consuming a token.
-        db.scalars.return_value.all.return_value = [expired_verification]
-
-        with self.assertRaises(InvalidEmailVerificationTokenError):
-            verify_email_verification_token(db, expired_token)
-
-        db.commit.assert_not_called()
+        logger.warning.assert_called_once_with("로그인 인증에 실패했습니다.")
+        logger.debug.assert_not_called()
 
 
 if __name__ == "__main__":

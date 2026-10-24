@@ -1,16 +1,15 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, status
+from fastapi import APIRouter, Path, status
 
 from app.philosophers.schemas import (
     PhilosopherDetailResponse,
     PhilosopherListItem,
 )
-from app.philosophers.service import PhilosopherService
+from app.philosophers.service import PhilosopherServiceDep
 
 router = APIRouter(prefix="/philosophers", tags=["철학자"])
 
-PhilosopherServiceDep = Annotated[PhilosopherService, Depends(PhilosopherService)]
 PhilosopherIdPath = Annotated[
     int,
     Path(

@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import unittest
+from unittest.mock import patch
 
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
@@ -25,14 +26,18 @@ class ExceptionHandlerTests(unittest.TestCase):
         )
 
     def test_returns_safe_internal_server_error_response(self) -> None:
-        response = asyncio.run(
-            unhandled_exception_handler(None, RuntimeError("database failure"))
-        )
+        error = RuntimeError("password=database-secret")
+        with patch("app.core.exceptions.logger") as logger:
+            response = asyncio.run(unhandled_exception_handler(None, error))
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(
             json.loads(response.body),
             {"detail": "서버 내부 오류가 발생했습니다."},
+        )
+        logger.error.assert_called_once_with(
+            "처리되지 않은 서버 예외가 발생했습니다.",
+            exc_info=(RuntimeError, error, error.__traceback__),
         )
 
     def test_returns_korean_message_for_invalid_email_format(self) -> None:
