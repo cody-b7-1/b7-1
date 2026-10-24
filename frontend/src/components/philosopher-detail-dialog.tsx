@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
 
 import { PhilosopherAvatar } from "@/components/philosopher-avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,30 +12,86 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { ResolvedPhilosopher } from "@/lib/philosopher";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getPhilosopher, type PhilosopherId } from "@/lib/api";
+import { withDefaults, type ResolvedPhilosopher } from "@/lib/philosopher";
 
 type Props = {
-  /** 열 철학자. null이면 모달이 닫혀 있음 */
-  philosopher: ResolvedPhilosopher | null;
+  philosopherId: PhilosopherId;
+  initialPhilosopher?: ResolvedPhilosopher;
+  onUpdate?: (updated: ResolvedPhilosopher) => void;
   onClose: () => void;
   onStartChat: (philosopher: ResolvedPhilosopher) => void;
 };
 
-// 메인 카드의 '자세히 보기'를 누르면 뜨는 철학자 상세 모달.
-// 모달은 하나만 두고, 누른 철학자에 따라 내용만 바뀝니다.
-// 백엔드에서 받는 칸(name, profileImageUrl, IconImageUrl, introduction, description, palette)만 쓰고,
-// 철학자별 문구나 색은 프론트에 적어두지 않습니다.
 export function PhilosopherDetailDialog({
-  philosopher,
+  philosopherId,
+  initialPhilosopher,
+  onUpdate,
   onClose,
   onStartChat,
 }: Props) {
+  const [philosopher, setPhilosopher] = useState<ResolvedPhilosopher | null>(
+    initialPhilosopher ?? null,
+  );
+  const [loading, setLoading] = useState(!initialPhilosopher);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    setError("");
+
+    async function loadPhilosopher() {
+      try {
+        const detail = await getPhilosopher(philosopherId, signal);
+        if (!signal.aborted) {
+          const fresh = withDefaults(detail);
+          setPhilosopher(fresh);
+          onUpdate?.(fresh);
+        }
+      } catch {
+        if (!signal.aborted) {
+          setError("철학자 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          setPhilosopher(null);
+        }
+      } finally {
+        if (!signal.aborted) setLoading(false);
+      }
+    }
+
+    void loadPhilosopher();
+    return () => controller.abort();
+  }, [philosopherId, onUpdate]);
+
   return (
     <Dialog
-      open={philosopher !== null}
+      open
       onOpenChange={(open) => !open && onClose()}
     >
-      <DialogContent className="max-h-[92svh] gap-0 overflow-hidden overflow-y-auto border-0 bg-card p-0 sm:max-w-4xl sm:rounded-3xl">
+      <DialogContent animate={false} aria-busy={loading} className="max-h-[92svh] gap-0 overflow-hidden overflow-y-auto border-0 bg-card p-0 sm:max-w-4xl sm:rounded-3xl">
+        {loading && (
+          <div className="space-y-6 p-8" role="status">
+            <DialogTitle>철학자 정보를 불러오는 중입니다.</DialogTitle>
+            <div className="grid gap-6 md:grid-cols-2" aria-hidden="true">
+              <Skeleton className="aspect-square w-full rounded-xl" />
+              <div className="space-y-4">
+                <Skeleton className="h-8 w-1/2" />
+                <Skeleton className="h-5 w-full" />
+                <Skeleton className="h-5 w-3/4" />
+              </div>
+            </div>
+          </div>
+        )}
+        {error && (
+          <div className="space-y-5 p-8">
+            <DialogTitle>철학자 정보를 불러오지 못했습니다.</DialogTitle>
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          </div>
+        )}
         {philosopher && (
           <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
             {/* 왼쪽: 철학자 색으로 물든 패널 + 큰 초상 */}
@@ -59,6 +117,9 @@ export function PhilosopherDetailDialog({
                 src={philosopher.profileImageUrl}
                 alt={`${philosopher.name} 초상`}
                 className="relative w-[64%] max-w-95 md:w-[86%]"
+                onError={(event) => {
+                  event.currentTarget.hidden = true;
+                }}
               />
             </div>
 

@@ -11,8 +11,10 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  init?.signal?.throwIfAborted();
   if (import.meta.env.VITE_MOCK === "true") {
     const { getMockResponse } = await import("./api.mock");
+    init?.signal?.throwIfAborted();
     const mockResponse = getMockResponse(
       init?.method ?? "GET",
       path,
@@ -101,14 +103,11 @@ export const getMe = () => request<User>("/auth/me");
 // ---- philosopher ----
 export type PhilosopherId = number;
 
-export type PhilosopherBrief = {
+export type PhilosopherDetailed = {
   id: PhilosopherId;
   name: string;
   description: string | null;
   profileImageUrl: string | null;
-};
-
-export type PhilosopherDetailed = PhilosopherBrief & {
   iconImageUrl: string | null;
   introduction: string | null;
   avatarColor: string | null;
@@ -116,11 +115,19 @@ export type PhilosopherDetailed = PhilosopherBrief & {
   softColor: string | null;
 };
 
-export const getPhilosopherList = () =>
-  request<PhilosopherBrief[]>("/philosophers");
+export type PhilosopherSummary = Pick<
+  PhilosopherDetailed,
+  "id" | "name" | "introduction" | "iconImageUrl" | "avatarColor"
+>;
 
-export const getPhilosopher = (id: number) =>
-  request<PhilosopherDetailed>(`/philosophers/${id}`);
+export const getPhilosopherList = (signal?: AbortSignal) =>
+  request<PhilosopherDetailed[]>("/philosophers", { signal });
+
+export const getPhilosopher = (id: PhilosopherId, signal?: AbortSignal) =>
+  request<PhilosopherDetailed>(`/philosophers/${id}`, { signal });
+
+export const getPhilosopherSummaries = (signal?: AbortSignal) =>
+  request<PhilosopherSummary[]>("/philosophers/summaries", { signal });
 
 // ---- chat ----
 export type ChatId = string;

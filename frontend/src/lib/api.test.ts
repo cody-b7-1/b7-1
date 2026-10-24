@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
   ApiError,
   deleteChat,
@@ -7,6 +7,7 @@ import {
   getMe,
   getPhilosopher,
   getPhilosopherList,
+  getPhilosopherSummaries,
   login,
   logout,
   sendMessage,
@@ -14,7 +15,12 @@ import {
   startChat,
 } from "./api";
 
-afterEach(() => vi.unstubAllGlobals());
+// 개인 .env.local의 mock 설정과 관계없이 실제 요청 경로를 검증합니다.
+beforeEach(() => vi.stubEnv("VITE_MOCK", "false"));
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 // body가 undefined면 빈 응답
 function mockFetch(status: number, body?: unknown, headers?: HeadersInit) {
@@ -88,27 +94,94 @@ const philosopher = {
   name: "소크라테스",
   description: "desc",
   profileImageUrl: "/p.png",
+  iconImageUrl: "/i.png",
+  introduction: "intro",
+  avatarColor: "#000",
+  inkColor: "#111",
+  softColor: "#222",
 };
 
-test("getPhilosopherList: 200이면 PhilosopherBrief[] 반환", async () => {
+const philosopherSummary = {
+  id: 1,
+  name: "소크라테스",
+  introduction: "intro",
+  iconImageUrl: "/i.png",
+  avatarColor: "#000",
+};
+
+test("getPhilosopherList: 200이면 PhilosopherDetailed[] 반환", async () => {
   const fetch = mockFetch(200, [philosopher]);
 
   expect(await getPhilosopherList()).toEqual([philosopher]);
   expect(sent(fetch)).toMatchObject({ url: "/api/philosophers", method: undefined });
 });
 
-test("getPhilosopher: 200이면 PhilosopherDetailed 반환", async () => {
-  const detailed = {
-    ...philosopher,
-    iconImageUrl: "/i.png",
-    introduction: "intro",
-    avatarColor: "#000",
-    inkColor: "#111",
-    softColor: "#222",
-  };
-  const fetch = mockFetch(200, detailed);
+test("getPhilosopherList: 요청 중 중단하면 AbortError로 종료한다", async () => {
+  const controller = new AbortController();
+  const fetch = vi.fn((_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    }),
+  );
+  vi.stubGlobal("fetch", fetch);
 
-  expect(await getPhilosopher(1)).toEqual(detailed);
+  const result = getPhilosopherList(controller.signal);
+  controller.abort();
+
+  await expect(result).rejects.toMatchObject({ name: "AbortError" });
+  expect(fetch.mock.calls[0][1]?.signal).toBe(controller.signal);
+});
+
+test("getPhilosopherList: 이미 중단된 요청은 네트워크로 보내지 않는다", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  const controller = new AbortController();
+  controller.abort();
+
+  await expect(getPhilosopherList(controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test("getPhilosopherList: mock 로딩 중 중단된 요청도 AbortError로 종료한다", async () => {
+  vi.stubEnv("VITE_MOCK", "true");
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  const controller = new AbortController();
+
+  const result = getPhilosopherList(controller.signal);
+  controller.abort();
+
+  await expect(result).rejects.toMatchObject({ name: "AbortError" });
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test("getPhilosopherSummaries: 200이면 PhilosopherSummary[] 반환", async () => {
+  const fetch = mockFetch(200, [philosopherSummary]);
+
+  expect(await getPhilosopherSummaries()).toEqual([philosopherSummary]);
+  expect(sent(fetch)).toMatchObject({ url: "/api/philosophers/summaries", method: undefined });
+});
+
+test("getPhilosopherSummaries: 요청 중 중단하면 AbortError로 종료한다", async () => {
+  const controller = new AbortController();
+  const fetch = vi.fn((_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    }),
+  );
+  vi.stubGlobal("fetch", fetch);
+
+  const result = getPhilosopherSummaries(controller.signal);
+  controller.abort();
+
+  await expect(result).rejects.toMatchObject({ name: "AbortError" });
+  expect(fetch.mock.calls[0][1]?.signal).toBe(controller.signal);
+});
+
+test("getPhilosopher: 200이면 PhilosopherDetailed 반환", async () => {
+  const fetch = mockFetch(200, philosopher);
+
+  expect(await getPhilosopher(1)).toEqual(philosopher);
   expect(sent(fetch)).toMatchObject({ url: "/api/philosophers/1", method: undefined });
 });
 
