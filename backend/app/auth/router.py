@@ -9,6 +9,7 @@ from fastapi import (
     Response,
     status,
 )
+from starlette.concurrency import run_in_threadpool
 
 from app.auth.dependencies import (
     CurrentUser,
@@ -30,8 +31,8 @@ from app.auth.schemas import (
 )
 from app.auth.security import RefreshTokenPayload
 from app.auth.service import (
-    EmailAlreadyVerifiedError,
     EmailAlreadyRegisteredError,
+    EmailAlreadyVerifiedError,
     EmailNotFoundError,
     EmailNotVerifiedError,
     EmailUserNotFoundError,
@@ -209,20 +210,17 @@ def login(
 
 @router.post(
     "/email/send",
-    status_code=status.HTTP_202_ACCEPTED,
+    status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     response_class=Response,
     summary="이메일 인증 링크 발송",
     description=(
-        "이메일 인증 링크 발송 요청을 접수합니다. 메일은 응답 후 백그라운드에서 "
-        "전송하며, SMTP 전송 실패는 로그로 기록되고 접수 응답에는 영향을 주지 않습니다."
+        "이메일 인증 토큰을 생성·저장하고 SMTP로 인증 링크를 전송합니다. "
+        "SMTP 전송 결과를 확인한 후 응답합니다."
     ),
     responses={
-        status.HTTP_202_ACCEPTED: {
-            "description": (
-                "이메일 인증 링크 발송 요청을 접수했습니다. 이후 SMTP 전송 실패 여부와 "
-                "관계없이 이 응답을 유지합니다."
-            ),
+        status.HTTP_204_NO_CONTENT: {
+            "description": "이메일 인증 링크를 SMTP로 전송했습니다.",
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "등록된 사용자를 찾을 수 없습니다.",
@@ -236,10 +234,13 @@ def login(
         status.HTTP_429_TOO_MANY_REQUESTS: {
             "description": "이메일 인증 링크 발송 요청 한도를 초과했습니다.",
         },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "SMTP 설정이 누락되었거나 SMTP 연결·인증·전송에 실패했습니다.",
+        },
     },
 )
-def send_email_verification_link(
-    request: EmailSendRequest, background_tasks: BackgroundTasks, db: DBSession
+async def send_email_verification_link(
+    request: EmailSendRequest, db: DBSession
 ) -> None:
 
     try:
@@ -251,7 +252,9 @@ def send_email_verification_link(
         ) from None
 
     try:
-        email, token = create_email_verification(db, str(request.email))
+        email, token = await run_in_threadpool(
+            create_email_verification, db, str(request.email)
+        )
     except EmailUserNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -263,11 +266,13 @@ def send_email_verification_link(
             detail="이미 이메일 인증이 완료되었습니다.",
         ) from None
 
-    background_tasks.add_task(
-        deliver_email_verification_email,
-        email,
-        token,
-    )
+    try:
+        await deliver_email_verification_email(email, token)
+    except EmailDeliveryError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="이메일 발송 서비스를 사용할 수 없습니다.",
+        ) from None
 
 
 @router.post(

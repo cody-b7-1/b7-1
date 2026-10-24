@@ -1,10 +1,12 @@
 """이메일 인증 링크를 SMTP로 전송합니다."""
 
 import logging
-import smtplib
 from email.message import EmailMessage
 from html import escape
 from urllib.parse import urlencode
+
+import aiosmtplib
+from aiosmtplib.errors import SMTPException
 
 from app.core.config import settings
 
@@ -24,7 +26,7 @@ def validate_smtp_settings() -> None:
         raise EmailDeliveryError("SMTP 설정이 완료되지 않았습니다.")
 
 
-def send_email_verification_email(email: str, token: str) -> None:
+async def send_email_verification_email(email: str, token: str) -> None:
 
     # email 전송
     validate_smtp_settings()
@@ -64,20 +66,25 @@ def send_email_verification_email(email: str, token: str) -> None:
 
     # 전송
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
-            if settings.smtp_use_tls:
-                smtp.starttls()
-            smtp.login(settings.smtp_username, settings.smtp_password)
-            smtp.send_message(message)
-    except (OSError, smtplib.SMTPException) as error:
+        await aiosmtplib.send(
+            message,
+            hostname=settings.smtp_host,
+            port=settings.smtp_port,
+            username=settings.smtp_username,
+            password=settings.smtp_password,
+            start_tls=settings.smtp_use_tls,
+            timeout=10,
+        )
+    except (OSError, SMTPException, TimeoutError) as error:
         raise EmailDeliveryError("인증 이메일을 발송하지 못했습니다.") from error
 
 
-def deliver_email_verification_email(email: str, token: str) -> None:
-    """백그라운드에서 인증 이메일을 전송하고 민감정보 없이 결과를 기록합니다."""
+async def deliver_email_verification_email(email: str, token: str) -> None:
+    """인증 이메일을 전송하고 민감정보 없이 결과를 기록합니다."""
     try:
-        send_email_verification_email(email, token)
+        await send_email_verification_email(email, token)
     except EmailDeliveryError:
         logger.error("이메일 인증 메일 SMTP 전송에 실패했습니다.")
+        raise
     else:
         logger.info("이메일 인증 메일 SMTP 전송에 성공했습니다.")

@@ -1,7 +1,7 @@
 import os
 import unittest
 from datetime import timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 from fastapi import BackgroundTasks, HTTPException, Response
@@ -17,6 +17,7 @@ from app.auth.router import (
     verify_email_link_token,
 )
 from app.auth.router import router as auth_router
+from app.auth.email import EmailDeliveryError
 from app.auth.dependencies import (
     get_optional_refresh_token,
     get_required_refresh_token,
@@ -41,7 +42,7 @@ from app.auth.service import (
 )
 
 
-class AuthRouterTests(unittest.TestCase):
+class AuthRouterTests(unittest.IsolatedAsyncioTestCase):
     def test_login_sets_access_and_refresh_token_cookies(self) -> None:
         user_id = uuid4()
         response = Response()
@@ -139,26 +140,33 @@ class AuthRouterTests(unittest.TestCase):
         self.assertTrue(any(cookie.startswith("accessToken=") for cookie in cookies))
         self.assertTrue(any(cookie.startswith("refreshToken=") for cookie in cookies))
 
-    def test_email_resend_queues_only_when_verification_is_issued(self) -> None:
+    async def test_email_resend_returns_204_after_delivery_succeeds(self) -> None:
         request = EmailSendRequest(email="user@example.com")
         user = Mock(email="user@example.com")
         db = Mock()
         db.scalar.return_value = user
-        background_tasks = BackgroundTasks()
 
-        with patch(
-            "app.auth.router.create_email_verification",
-            return_value=("user@example.com", "new-token"),
+        with (
+            patch(
+                "app.auth.router.create_email_verification",
+                return_value=("user@example.com", "new-token"),
+            ) as create,
+            patch(
+                "app.auth.router.deliver_email_verification_email",
+                new=AsyncMock(),
+            ) as deliver,
         ):
-            result = send_email_verification_link(request, background_tasks, db)
+            result = await send_email_verification_link(request, db)
 
         self.assertIsNone(result)
-        self.assertEqual(len(background_tasks.tasks), 1)
-        self.assertEqual(
-            background_tasks.tasks[0].args, ("user@example.com", "new-token")
+        create.assert_called_once_with(db, "user@example.com")
+        deliver.assert_awaited_once_with("user@example.com", "new-token")
+        email_send_route = next(
+            route for route in auth_router.routes if route.path == "/auth/email/send"
         )
+        self.assertEqual(email_send_route.status_code, 204)
 
-    def test_email_resend_maps_user_errors_to_http_status(self) -> None:
+    async def test_email_resend_maps_user_errors_to_http_status(self) -> None:
         request = EmailSendRequest(email="user@example.com")
 
         for error, expected_status in (
@@ -173,11 +181,27 @@ class AuthRouterTests(unittest.TestCase):
                 ),
                 self.assertRaises(HTTPException) as raised,
             ):
-                send_email_verification_link(
-                    request, BackgroundTasks(), Mock()
-                )
+                await send_email_verification_link(request, Mock())
 
             self.assertEqual(raised.exception.status_code, expected_status)
+
+    async def test_email_resend_returns_503_when_smtp_delivery_fails(self) -> None:
+        request = EmailSendRequest(email="user@example.com")
+
+        with (
+            patch(
+                "app.auth.router.create_email_verification",
+                return_value=("user@example.com", "new-token"),
+            ),
+            patch(
+                "app.auth.router.deliver_email_verification_email",
+                new=AsyncMock(side_effect=EmailDeliveryError),
+            ),
+            self.assertRaises(HTTPException) as raised,
+        ):
+            await send_email_verification_link(request, Mock())
+
+        self.assertEqual(raised.exception.status_code, 503)
 
     def test_refresh_rotates_tokens_and_sets_login_compatible_cookies(self) -> None:
         user_id = uuid4()
