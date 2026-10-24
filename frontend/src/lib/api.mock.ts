@@ -182,6 +182,7 @@ export function getMockResponse(method: string, path: string, body?: unknown): u
   if (method === "POST" && pathname === "/auth/sign-up") return user;
   if (method === "POST" && pathname === "/auth/login") return null;
   if (method === "POST" && pathname === "/auth/logout") return null;
+  if (method === "POST" && pathname === "/auth/refresh") return null;
   if (method === "GET" && pathname === "/auth/me") return user;
 
   if (method === "GET" && pathname === "/philosophers") return philosophers;
