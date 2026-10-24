@@ -1,0 +1,90 @@
+"""이메일 인증 링크를 SMTP로 전송합니다."""
+
+import logging
+from email.message import EmailMessage
+from html import escape
+from urllib.parse import urlencode
+
+import aiosmtplib
+from aiosmtplib.errors import SMTPException
+
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class EmailDeliveryError(Exception):
+    """이메일 전송에 실패했을 때 발생합니다."""
+
+
+def validate_smtp_settings() -> None:
+    if (
+        not settings.smtp_host
+        or not settings.smtp_username
+        or not settings.smtp_password
+    ):
+        raise EmailDeliveryError("SMTP 설정이 완료되지 않았습니다.")
+
+
+async def send_email_verification_email(email: str, token: str) -> None:
+
+    # email 전송
+    validate_smtp_settings()
+    verification_url = (
+        f"{settings.frontend_url.rstrip('/')}/verify-email?"
+        f"{urlencode({'token': token})}"
+    )
+
+    # 메시지 생성
+    message = EmailMessage()
+    message["Subject"] = "Philo 이메일 인증"
+    message["From"] = settings.smtp_from_email or settings.smtp_username
+    message["To"] = email
+    message.set_content(
+        "Philo 계정의 이메일 인증을 완료하려면 아래 링크를 열어 주세요.\n\n"
+        f"{verification_url}\n\n"
+        f"이 링크는 {settings.email_verification_expire_hours}시간 동안 유효합니다."
+    )
+
+    safe_url = escape(verification_url, quote=True)
+    message.add_alternative(
+        f"""
+        <html>
+          <body>
+            <p>Philo 계정의 이메일 인증을 완료하려면 아래 링크를 열어 주세요.</p>
+            <br>
+            <p>
+              <a href="{safe_url}">{safe_url}</a>
+            </p>
+            <br>
+            <p>이 링크는 {settings.email_verification_expire_hours}시간 동안 유효합니다.</p>
+          </body>
+        </html>
+        """,
+        subtype="html",
+    )
+
+    # 전송
+    try:
+        await aiosmtplib.send(
+            message,
+            hostname=settings.smtp_host,
+            port=settings.smtp_port,
+            username=settings.smtp_username,
+            password=settings.smtp_password,
+            start_tls=settings.smtp_use_tls,
+            timeout=10,
+        )
+    except (OSError, SMTPException, TimeoutError) as error:
+        raise EmailDeliveryError("인증 이메일을 발송하지 못했습니다.") from error
+
+
+async def deliver_email_verification_email(email: str, token: str) -> None:
+    """인증 이메일을 전송하고 민감정보 없이 결과를 기록합니다."""
+    try:
+        await send_email_verification_email(email, token)
+    except EmailDeliveryError:
+        logger.error("이메일 인증 메일 SMTP 전송에 실패했습니다.")
+        raise
+    else:
+        logger.info("이메일 인증 메일 SMTP 전송에 성공했습니다.")
