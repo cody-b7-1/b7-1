@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Annotated
@@ -34,6 +35,8 @@ from app.philosophers.models.philosopher import Philosopher
 # MariaDB(1205: 잠금 대기 초과, NOWAIT 시 즉시 반환), MySQL 8(3572: NOWAIT 잠금 실패)
 LOCK_NOT_AVAILABLE_ERROR_CODES = frozenset({1205, 3572})
 
+logger = logging.getLogger(__name__)
+
 
 def _is_lock_not_available(error: OperationalError) -> bool:
     args = getattr(error.orig, "args", ())
@@ -59,6 +62,7 @@ class ChatService:
             self.db.refresh(chat, with_for_update={"nowait": True})
         except OperationalError as exc:
             if _is_lock_not_available(exc):
+                logger.warning("채팅방 잠금 획득에 실패했습니다. chat_id=%s", chat.chat_id)
                 raise ChatBusyError() from exc
             raise  # 잠금 실패가 아닌 다른 DB 오류는 그대로 상위로 전달
 
@@ -67,18 +71,33 @@ class ChatService:
     ) -> Chat:
         chat = self.db.get(Chat, chat_id)
         if chat is None or chat.deleted_at is not None or chat.user_id != user_id:
+            logger.warning(
+                "사용자의 채팅방을 찾을 수 없습니다. user_id=%s chat_id=%s",
+                user_id,
+                chat_id,
+            )
             raise ChatNotFoundError()
 
         # 소유권을 먼저 확인한 뒤에 잠가서, 타인의 요청이 남의 채팅방 잠금에 영향을 주지 않게 한다.
         if lock:
             self._lock_chat(chat)
             if chat.deleted_at is not None:
+                logger.warning(
+                    "잠금 획득 후 삭제된 채팅방이 확인되었습니다. "
+                    "user_id=%s chat_id=%s",
+                    user_id,
+                    chat_id,
+                )
                 raise ChatNotFoundError()
         return chat
 
     def _get_active_philosopher(self, philosopher_id: int) -> Philosopher:
         philosopher = self.db.get(Philosopher, philosopher_id)
         if philosopher is None or not philosopher.is_active:
+            logger.warning(
+                "활성 철학자를 찾을 수 없습니다. philosopher_id=%s",
+                philosopher_id,
+            )
             raise PhilosopherNotFoundError()
         return philosopher
 
@@ -167,6 +186,13 @@ class ChatService:
         self.db.add_all([chat, user_message, assistant_message])
         self.db.commit()
 
+        logger.info(
+            "채팅방을 생성했습니다. user_id=%s chat_id=%s philosopher_id=%s",
+            user_id,
+            chat.chat_id,
+            philosopher.philosopher_id,
+        )
+
         # 6. 응답 스키마 반환
         return StartChatResponse(
             chat_id=chat.chat_id,
@@ -204,6 +230,13 @@ class ChatService:
         has_more = len(rows) > limit
         paged_chats = rows[:limit]
         next_cursor = paged_chats[-1].chat_id if has_more else None
+
+        logger.debug(
+            "채팅방 목록을 조회했습니다. user_id=%s count=%s has_more=%s",
+            user_id,
+            len(paged_chats),
+            has_more,
+        )
 
         return ChatListResponse(
             items=[
@@ -278,6 +311,15 @@ class ChatService:
         self.db.add_all([chat, *new_messages])
         self.db.commit()
 
+        logger.info(
+            "채팅 메시지 처리를 완료했습니다. "
+            "user_id=%s chat_id=%s philosopher_id=%s philosopher_changed=%s",
+            user_id,
+            chat.chat_id,
+            philosopher.philosopher_id,
+            philosopher_changed,
+        )
+
         # 9. 응답 스키마 반환
         return SendMessageResponse(
             messages=[MessageItem.model_validate(m) for m in new_messages],
@@ -292,6 +334,11 @@ class ChatService:
         chat = self._get_owned_chat(chat_id, user_id, lock=True)
         chat.deleted_at = utc_now()
         self.db.commit()
+        logger.info(
+            "채팅방을 삭제했습니다. user_id=%s chat_id=%s",
+            user_id,
+            chat_id,
+        )
 
     # GET /chats/{chat_id}
     def get_chat(
@@ -308,6 +355,13 @@ class ChatService:
         if cursor is not None:
             cursor_message = self.db.get(Message, cursor)
             if cursor_message is None or cursor_message.chat_id != chat_id:
+                logger.warning(
+                    "채팅 메시지 커서를 찾을 수 없습니다. "
+                    "user_id=%s chat_id=%s cursor=%s",
+                    user_id,
+                    chat_id,
+                    cursor,
+                )
                 raise CursorMessageNotFoundError()
             stmt = stmt.where(
                 (Message.created_at < cursor_message.created_at)
@@ -327,6 +381,15 @@ class ChatService:
         next_cursor = paged_messages[-1].message_id if has_more else None
 
         chronological_messages = list(reversed(paged_messages))
+
+        logger.debug(
+            "채팅방 상세를 조회했습니다. "
+            "user_id=%s chat_id=%s message_count=%s has_more=%s",
+            user_id,
+            chat_id,
+            len(chronological_messages),
+            has_more,
+        )
 
         return GetChatResponse(
             chat_id=chat.chat_id,
