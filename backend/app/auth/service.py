@@ -47,8 +47,16 @@ class EmailNotVerifiedError(Exception):
     pass
 
 
+class EmailUserNotFoundError(Exception):
+    """이메일 인증을 요청한 사용자가 존재하지 않을 때 발생합니다."""
+
+
+class EmailAlreadyVerifiedError(Exception):
+    """이미 이메일 인증을 완료한 사용자일 때 발생합니다."""
+
+
 class InvalidEmailVerificationTokenError(Exception):
-    """Raised when an email verification token is expired, used, or invalid."""
+    """이메일 인증 토큰이 만료·사용되었거나 유효하지 않을 때 발생합니다."""
 
 
 class InvalidRefreshTokenError(Exception):
@@ -82,7 +90,7 @@ def create_user(db: Session, request: SignUpRequest) -> User:
     return user
 
 
-def create_email_verification(db: Session, email: str) -> tuple[str, str] | None:
+def create_email_verification(db: Session, email: str) -> tuple[str, str]:
 
     # 사용자 조회 + 잠금
     user = db.scalar(
@@ -94,10 +102,13 @@ def create_email_verification(db: Session, email: str) -> tuple[str, str] | None
         .with_for_update()
     )
 
-    # 사용자가 없거나 이미 인증된 경우
-    if user is None or user.email_verified_at is not None:
+    if user is None:
         db.rollback()
-        return None
+        raise EmailUserNotFoundError
+
+    if user.email_verified_at is not None:
+        db.rollback()
+        raise EmailAlreadyVerifiedError
 
     # 새로운 토큰 생성
     token = token_urlsafe(32)

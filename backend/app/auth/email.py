@@ -1,4 +1,4 @@
-"""SMTP delivery for email verification links."""
+"""이메일 인증 링크를 SMTP로 전송합니다."""
 
 import logging
 import smtplib
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmailDeliveryError(Exception):
-    """email 전송 실패 시"""
+    """이메일 전송에 실패했을 때 발생합니다."""
 
 
 def validate_smtp_settings() -> None:
@@ -74,7 +74,7 @@ def send_email_verification_email(email: str, token: str) -> None:
 
 
 def deliver_email_verification_email(email: str, token: str) -> None:
-    """Deliver in a background task and log the outcome without credentials or tokens."""
+    """백그라운드에서 인증 이메일을 전송하고 민감정보 없이 결과를 기록합니다."""
     try:
         send_email_verification_email(email, token)
     except EmailDeliveryError:

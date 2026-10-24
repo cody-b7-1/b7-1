@@ -30,9 +30,11 @@ from app.auth.schemas import (
 )
 from app.auth.security import RefreshTokenPayload
 from app.auth.service import (
+    EmailAlreadyVerifiedError,
     EmailAlreadyRegisteredError,
     EmailNotFoundError,
     EmailNotVerifiedError,
+    EmailUserNotFoundError,
     InvalidEmailVerificationTokenError,
     InvalidRefreshTokenError,
     PasswordMismatchError,
@@ -212,9 +214,8 @@ def login(
     response_class=Response,
     summary="이메일 인증 링크 발송",
     description=(
-        "이메일 인증 링크 발송 요청을 접수합니다. 계정 존재 여부나 기존 인증 여부와 관계없이 "
-        "동일한 응답을 반환합니다. 메일은 응답 후 백그라운드에서 전송하며, SMTP 전송 "
-        "실패는 로그로 기록되고 접수 응답에는 영향을 주지 않습니다."
+        "이메일 인증 링크 발송 요청을 접수합니다. 메일은 응답 후 백그라운드에서 "
+        "전송하며, SMTP 전송 실패는 로그로 기록되고 접수 응답에는 영향을 주지 않습니다."
     ),
     responses={
         status.HTTP_202_ACCEPTED: {
@@ -222,6 +223,12 @@ def login(
                 "이메일 인증 링크 발송 요청을 접수했습니다. 이후 SMTP 전송 실패 여부와 "
                 "관계없이 이 응답을 유지합니다."
             ),
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "등록된 사용자를 찾을 수 없습니다.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "이미 이메일 인증이 완료된 사용자입니다.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "이메일이 누락되었거나 형식이 올바르지 않습니다.",
@@ -243,12 +250,18 @@ def send_email_verification_link(
             detail="이메일 발송 서비스를 사용할 수 없습니다.",
         ) from None
 
-    result = create_email_verification(db, str(request.email))
-
-    if result is None:
-        return
-
-    email, token = result
+    try:
+        email, token = create_email_verification(db, str(request.email))
+    except EmailUserNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="등록된 사용자를 찾을 수 없습니다.",
+        ) from None
+    except EmailAlreadyVerifiedError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 이메일 인증이 완료되었습니다.",
+        ) from None
 
     background_tasks.add_task(
         deliver_email_verification_email,
@@ -287,7 +300,7 @@ def send_email_verification_link(
     },
 )
 def verify_email_link_token(request: EmailVerifyRequest, db: DBSession) -> None:
-    """Consume an email verification token and mark the account as verified."""
+    """이메일 인증 토큰을 사용하고 계정을 인증 완료 상태로 변경합니다."""
     try:
         # 토큰 검증
         verify_email_verification_token(db, request.token)

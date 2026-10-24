@@ -21,13 +21,16 @@ from app.auth.security import (
     verify_refresh_token_hash,
 )
 from app.auth.service import (
+    EmailAlreadyVerifiedError,
     EmailAlreadyRegisteredError,
     EmailNotFoundError,
     EmailNotVerifiedError,
+    EmailUserNotFoundError,
     InvalidEmailVerificationTokenError,
     InvalidRefreshTokenError,
     PasswordMismatchError,
     authenticate_user,
+    create_email_verification,
     create_user,
     issue_refresh_token,
     login_user,
@@ -75,6 +78,20 @@ class AuthServiceTests(unittest.TestCase):
             if verified
             else None,
         )
+
+    def test_create_email_verification_raises_for_unavailable_user(self) -> None:
+        for user, error in (
+            (None, EmailUserNotFoundError),
+            (self._login_user(), EmailAlreadyVerifiedError),
+        ):
+            with self.subTest(error=error.__name__):
+                db = Mock()
+                db.scalar.return_value = user
+
+                with self.assertRaises(error):
+                    create_email_verification(db, "user@example.com")
+
+                db.rollback.assert_called_once_with()
 
     @patch("app.auth.service.logger")
     def test_verify_email_logs_success_without_sensitive_data(self, logger) -> None:

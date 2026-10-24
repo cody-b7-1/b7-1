@@ -32,7 +32,9 @@ from app.auth.security import (
     verify_refresh_token,
 )
 from app.auth.service import (
+    EmailAlreadyVerifiedError,
     EmailNotFoundError,
+    EmailUserNotFoundError,
     InvalidEmailVerificationTokenError,
     InvalidRefreshTokenError,
     PasswordMismatchError,
@@ -146,21 +148,36 @@ class AuthRouterTests(unittest.TestCase):
 
         with patch(
             "app.auth.router.create_email_verification",
-            side_effect=[("user@example.com", "new-token"), None],
+            return_value=("user@example.com", "new-token"),
         ):
             result = send_email_verification_link(request, background_tasks, db)
-            no_account_tasks = BackgroundTasks()
-            no_result = send_email_verification_link(
-                request, no_account_tasks, db
-            )
 
         self.assertIsNone(result)
         self.assertEqual(len(background_tasks.tasks), 1)
         self.assertEqual(
             background_tasks.tasks[0].args, ("user@example.com", "new-token")
         )
-        self.assertIsNone(no_result)
-        self.assertEqual(no_account_tasks.tasks, [])
+
+    def test_email_resend_maps_user_errors_to_http_status(self) -> None:
+        request = EmailSendRequest(email="user@example.com")
+
+        for error, expected_status in (
+            (EmailUserNotFoundError, 404),
+            (EmailAlreadyVerifiedError, 409),
+        ):
+            with (
+                self.subTest(error=error.__name__),
+                patch(
+                    "app.auth.router.create_email_verification",
+                    side_effect=error,
+                ),
+                self.assertRaises(HTTPException) as raised,
+            ):
+                send_email_verification_link(
+                    request, BackgroundTasks(), Mock()
+                )
+
+            self.assertEqual(raised.exception.status_code, expected_status)
 
     def test_refresh_rotates_tokens_and_sets_login_compatible_cookies(self) -> None:
         user_id = uuid4()
