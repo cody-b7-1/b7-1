@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     jwt_access_token_expire_days: Annotated[int, Field(gt=0)] = 7
     jwt_refresh_token_expire_days: Annotated[int, Field(gt=0)] = 14
 
+    frontend_url: str
+    email_verification_expire_hours: Annotated[int, Field(gt=0)] = 24
+
+    smtp_host: str = ""
+    smtp_port: Annotated[int, Field(gt=0, le=65535)] = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_use_tls: bool = True
     # LLM (OpenAI 호환 Chat Completions API) 설정
     llm_api_key: str = ""
     llm_base_url: str = "https://copa.codyssey.kr/v1"

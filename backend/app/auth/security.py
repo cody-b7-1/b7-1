@@ -35,6 +35,11 @@ def verify_password(password: str, password_hash: str) -> bool:
     return password_hasher.verify(password, password_hash)
 
 
+def hash_email_verification_token(token: str) -> str:
+    """이메일 인증 토큰을 DB 저장용 SHA-256 해시로 변환합니다."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def hash_refresh_token(token: str) -> str:
     """리프레시 토큰을 DB 저장용 SHA-256 해시로 변환합니다."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()

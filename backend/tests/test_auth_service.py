@@ -1,6 +1,5 @@
 import os
 import unittest
-from unittest.mock import patch
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 from uuid import uuid4
@@ -22,17 +21,22 @@ from app.auth.security import (
     verify_refresh_token_hash,
 )
 from app.auth.service import (
+    EmailAlreadyVerifiedError,
     EmailAlreadyRegisteredError,
     EmailNotFoundError,
     EmailNotVerifiedError,
+    EmailUserNotFoundError,
+    InvalidEmailVerificationTokenError,
     InvalidRefreshTokenError,
     PasswordMismatchError,
     authenticate_user,
+    create_email_verification,
     create_user,
     issue_refresh_token,
     login_user,
     revoke_refresh_token,
     rotate_refresh_token,
+    verify_email_verification_token,
 )
 
 
@@ -74,6 +78,49 @@ class AuthServiceTests(unittest.TestCase):
             if verified
             else None,
         )
+
+    def test_create_email_verification_raises_for_unavailable_user(self) -> None:
+        for user, error in (
+            (None, EmailUserNotFoundError),
+            (self._login_user(), EmailAlreadyVerifiedError),
+        ):
+            with self.subTest(error=error.__name__):
+                db = Mock()
+                db.scalar.return_value = user
+
+                with self.assertRaises(error):
+                    create_email_verification(db, "user@example.com")
+
+                db.rollback.assert_called_once_with()
+
+    @patch("app.auth.service.logger")
+    def test_verify_email_logs_success_without_sensitive_data(self, logger) -> None:
+        user = self._login_user(verified=False)
+        verification = Mock(
+            verification_id=uuid4(),
+            user_id=user.user_id,
+        )
+        db = Mock()
+        db.scalar.side_effect = [verification, user, verification]
+
+        verify_email_verification_token(db, "secret-verification-token")
+
+        logger.info.assert_called_once_with("이메일 인증이 완료되었습니다.")
+        logger.warning.assert_not_called()
+
+    @patch("app.auth.service.logger")
+    def test_verify_email_logs_invalid_token_without_sensitive_data(self, logger) -> None:
+        db = Mock()
+        db.scalar.return_value = None
+
+        with self.assertRaises(InvalidEmailVerificationTokenError):
+            verify_email_verification_token(db, "secret-verification-token")
+
+        db.rollback.assert_called_once_with()
+        logger.warning.assert_called_once_with(
+            "유효하지 않거나 만료된 이메일 인증 토큰으로 인증을 시도했습니다."
+        )
+        logger.info.assert_not_called()
 
     @patch("app.auth.service.logger")
     def test_create_user_hashes_password_and_persists_user(self, logger) -> None:

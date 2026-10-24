@@ -9,12 +9,12 @@ from pydantic import ValidationError
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
+from app.auth.schemas import SignUpRequest
 from app.core.exceptions import (
     request_validation_error_handler,
     unhandled_exception_handler,
 )
 from app.main import app
-from app.auth.schemas import SignUpRequest
 
 
 class ExceptionHandlerTests(unittest.TestCase):
