@@ -180,6 +180,8 @@ export function getMockResponse(method: string, path: string, body?: unknown): u
   const cursor = searchParams.get("cursor");
 
   if (method === "POST" && pathname === "/auth/sign-up") return user;
+  if (method === "POST" && pathname === "/auth/email/send") return null;
+  if (method === "POST" && pathname === "/auth/email/verify") return null;
   if (method === "POST" && pathname === "/auth/login") return null;
   if (method === "POST" && pathname === "/auth/logout") return null;
   if (method === "POST" && pathname === "/auth/refresh") return null;

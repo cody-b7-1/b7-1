@@ -12,8 +12,10 @@ import {
   logout,
   refreshToken,
   sendMessage,
+  sendVerificationEmail,
   signUp,
   startChat,
+  verifyEmailToken,
 } from "./api";
 
 // 개인 .env.local의 mock 설정과 관계없이 실제 요청 경로를 검증합니다.
@@ -48,6 +50,22 @@ test("signUp: 201 + Set-Cookie면 User 반환", async () => {
 
   expect(await signUp(body)).toEqual(user);
   expect(sent(fetch)).toEqual({ url: "/api/auth/sign-up", method: "POST", body });
+});
+
+test("sendVerificationEmail: 204면 null 반환", async () => {
+  const fetch = mockFetch(204);
+  const body = { email: "a@b.c" };
+
+  expect(await sendVerificationEmail(body)).toBeNull();
+  expect(sent(fetch)).toEqual({ url: "/api/auth/email/send", method: "POST", body });
+});
+
+test("verifyEmailToken: 204면 null 반환", async () => {
+  const fetch = mockFetch(204);
+  const body = { token: "verify-token-123" };
+
+  expect(await verifyEmailToken(body)).toBeNull();
+  expect(sent(fetch)).toEqual({ url: "/api/auth/email/verify", method: "POST", body });
 });
 
 test("login: 204 + Set-Cookie면 null", async () => {

@@ -123,8 +123,28 @@ export type User = {
   nickname: string;
 };
 
+export type EmailSendBody = {
+  email: string;
+};
+
+export type EmailVerifyBody = {
+  token: string;
+};
+
 export const signUp = (body: SignUpBody) =>
   request<User>("/auth/sign-up", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const sendVerificationEmail = (body: EmailSendBody) =>
+  request<null>("/auth/email/send", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const verifyEmailToken = (body: EmailVerifyBody) =>
+  request<null>("/auth/email/verify", {
     method: "POST",
     body: JSON.stringify(body),
   });
