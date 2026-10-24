@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import Depends
@@ -8,7 +9,7 @@ from app.philosophers.exceptions import PhilosopherNotFoundError
 from app.philosophers.models.philosopher import Philosopher
 from app.philosophers.schemas import (
     PhilosopherDetailResponse,
-    PhilosopherListItem,
+    PhilosopherSummaryResponse,
 )
 
 
@@ -16,16 +17,24 @@ class PhilosopherService:
     def __init__(self, db: DBSession) -> None:
         self.db = db
 
-    def list_philosophers(self) -> list[PhilosopherListItem]:
+    def _get_active_philosophers(self) -> Sequence[Philosopher]:
         stmt = (
             select(Philosopher)
             .where(Philosopher.is_active.is_(True))
             .order_by(Philosopher.philosopher_id.asc())
         )
-        philosophers = self.db.scalars(stmt).all()
+        return self.db.scalars(stmt).all()
+
+    def list_philosophers(self) -> list[PhilosopherDetailResponse]:
         return [
-            PhilosopherListItem.model_validate(philosopher)
-            for philosopher in philosophers
+            PhilosopherDetailResponse.model_validate(philosopher)
+            for philosopher in self._get_active_philosophers()
+        ]
+
+    def list_philosopher_summaries(self) -> list[PhilosopherSummaryResponse]:
+        return [
+            PhilosopherSummaryResponse.model_validate(philosopher)
+            for philosopher in self._get_active_philosophers()
         ]
 
     def get_philosopher(self, philosopher_id: int) -> PhilosopherDetailResponse:

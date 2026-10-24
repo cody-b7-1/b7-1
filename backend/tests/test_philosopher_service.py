@@ -75,14 +75,37 @@ class PhilosopherServiceTests(unittest.TestCase):
         )
         self.service = PhilosopherService(self.db)  # type: ignore[arg-type]
 
-    def test_list_philosophers_returns_items(self) -> None:
+    def test_list_philosophers_returns_full_detail_items(self) -> None:
         result = self.service.list_philosophers()
 
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0].id, 1)
         self.assertEqual(result[0].name, "에라스무스")
+        self.assertEqual(result[0].description, "설명입니다.")
+        self.assertEqual(result[0].profile_image_url, "/images/profile.png")
+        self.assertEqual(result[0].introduction, "소개 문구입니다.")
+        self.assertEqual(result[0].icon_image_url, "/images/icon.png")
+        self.assertEqual(result[0].avatar_color, "#C9C35A")
+        self.assertEqual(result[0].ink_color, "#5A5A10")
+        self.assertEqual(result[0].soft_color, "#F3F2E1")
+
         self.assertEqual(result[1].id, 2)
         self.assertEqual(result[1].name, "쇼펜하우어")
+
+    def test_list_philosopher_summaries_returns_summary_items(self) -> None:
+        result = self.service.list_philosopher_summaries()
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0].id, 1)
+        self.assertEqual(result[0].name, "에라스무스")
+        self.assertEqual(result[0].introduction, "소개 문구입니다.")
+        self.assertEqual(result[0].icon_image_url, "/images/icon.png")
+        self.assertEqual(result[0].avatar_color, "#C9C35A")
+        # 요약 응답에는 상세 정보 필드가 포함되지 않아야 함
+        self.assertFalse(hasattr(result[0], "description"))
+        self.assertFalse(hasattr(result[0], "profile_image_url"))
+        self.assertFalse(hasattr(result[0], "ink_color"))
+        self.assertFalse(hasattr(result[0], "soft_color"))
 
     def test_get_philosopher_success(self) -> None:
         result = self.service.get_philosopher(1)
@@ -91,6 +114,8 @@ class PhilosopherServiceTests(unittest.TestCase):
         self.assertEqual(result.name, "에라스무스")
         self.assertEqual(result.introduction, "소개 문구입니다.")
         self.assertEqual(result.avatar_color, "#C9C35A")
+        self.assertEqual(result.ink_color, "#5A5A10")
+        self.assertEqual(result.soft_color, "#F3F2E1")
 
     def test_get_philosopher_raises_when_not_found(self) -> None:
         with self.assertRaises(PhilosopherNotFoundError):
