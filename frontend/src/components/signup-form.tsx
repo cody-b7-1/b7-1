@@ -47,6 +47,9 @@ function toSignupServerError(error: unknown): AuthServerError {
     if (error.status === 422) {
       return { message: "요청 값이 올바르지 않거나 누락되었습니다." };
     }
+    if (error.status === 429) {
+      return { message: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." };
+    }
     if (typeof error.body === "object" && error.body && "detail" in error.body) {
       return { message: String((error.body as { detail: unknown }).detail) };
     }

@@ -7,6 +7,7 @@ export type AuthServerError = {
   message: string;
   linkText?: string;
   linkTo?: string;
+  linkState?: unknown;
 };
 
 interface AuthErrorAlertProps {
@@ -24,6 +25,7 @@ export function AuthErrorAlert({ error }: AuthErrorAlertProps) {
         {error.linkTo && error.linkText && (
           <Link
             to={error.linkTo}
+            state={error.linkState}
             className="font-medium underline underline-offset-4 hover:opacity-80"
           >
             {error.linkText}

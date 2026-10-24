@@ -38,7 +38,7 @@ function getSignupSuccessMessage(state: SignupLocationState | null): string | nu
   return "회원가입이 완료되었습니다.\n이메일로 전송된 인증 링크를 확인해 주세요.";
 }
 
-function toLoginServerError(error: unknown): AuthServerError {
+function toLoginServerError(error: unknown, email: string): AuthServerError {
   if (error instanceof ApiError) {
     if (error.status === 401) {
       return { message: "이메일 주소 또는 비밀번호가 일치하지 않습니다." };
@@ -48,10 +48,14 @@ function toLoginServerError(error: unknown): AuthServerError {
         message: "이메일 인증이 완료되지 않은 계정입니다.\n이메일을 확인해 주세요.",
         linkText: "인증 안내 페이지로 이동",
         linkTo: "/verify-email",
+        linkState: { email },
       };
     }
     if (error.status === 422) {
       return { message: "요청 값이 올바르지 않거나 누락되었습니다." };
+    }
+    if (error.status === 429) {
+      return { message: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." };
     }
     if (typeof error.body === "object" && error.body && "detail" in error.body) {
       return { message: String((error.body as { detail: unknown }).detail) };
@@ -115,7 +119,7 @@ export function LoginForm() {
       revalidator.revalidate();
       navigate("/");
     } catch (error) {
-      setServerError(toLoginServerError(error));
+      setServerError(toLoginServerError(error, result.data.email));
     } finally {
       setIsSubmitting(false);
     }
