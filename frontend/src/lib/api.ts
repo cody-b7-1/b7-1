@@ -10,7 +10,27 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// 여러 비동기 요청에서 동시에 401을 만났을 때 refresh 요청을 중복으로 보내지 않고 하나로 공유
+let refreshPromise: Promise<void> | null = null;
+
+async function executeRefresh(): Promise<void> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        await refreshToken();
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+  return refreshPromise;
+}
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  isRetry = false,
+): Promise<T> {
   init?.signal?.throwIfAborted();
   if (import.meta.env.VITE_MOCK === "true") {
     const { getMockResponse } = await import("./api.mock");
@@ -40,6 +60,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       body = text; // 프록시 502 HTML 등 JSON이 아닌 에러 응답
     }
   }
+
+  // 401 Unauthorized 발생 시:
+  // 로그인(/auth/login), 로그아웃(/auth/logout), 토큰 갱신(/auth/refresh) 자체의 401이 아니고 아직 재시도 전이라면
+  // 백그라운드에서 토큰 갱신(POST /auth/refresh) 후 원 요청을 1회 재시도합니다.
+  if (
+    resp.status === 401 &&
+    !isRetry &&
+    path !== "/auth/login" &&
+    path !== "/auth/logout" &&
+    path !== "/auth/refresh"
+  ) {
+    try {
+      await executeRefresh();
+      return await request<T>(path, init, true);
+    } catch {
+      // 갱신 실패(리프레시 토큰도 만료) 시 원래의 401 에러를 그대로 전달
+    }
+  }
+
   if (!resp.ok) throw new ApiError(resp.status, body);
   return body as T;
 }
@@ -84,8 +123,28 @@ export type User = {
   nickname: string;
 };
 
+export type EmailSendBody = {
+  email: string;
+};
+
+export type EmailVerifyBody = {
+  token: string;
+};
+
 export const signUp = (body: SignUpBody) =>
   request<User>("/auth/sign-up", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const sendVerificationEmail = (body: EmailSendBody) =>
+  request<null>("/auth/email/send", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const verifyEmailToken = (body: EmailVerifyBody) =>
+  request<null>("/auth/email/verify", {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -97,6 +156,9 @@ export const login = (body: LoginBody) =>
   });
 
 export const logout = () => request<null>("/auth/logout", { method: "POST" });
+
+export const refreshToken = () =>
+  request<null>("/auth/refresh", { method: "POST" });
 
 export const getMe = () => request<User>("/auth/me");
 

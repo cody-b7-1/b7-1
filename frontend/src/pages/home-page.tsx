@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import { getPhilosopherList, type PhilosopherId } from "@/lib/api";
+import { useOutletContext, useNavigate } from "react-router";
+import { getPhilosopherList, type PhilosopherId, type User } from "@/lib/api";
 import { withDefaults, type ResolvedPhilosopher } from "@/lib/philosopher";
 
 import { PhilosopherCard } from "@/components/philosopher-card";
@@ -11,12 +11,21 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 // 철학자 카드를 나열하는 메인 화면
 
 export function HomePage() {
+  const { user } = useOutletContext<{ user: User | null }>();
   const [philosophers, setPhilosophers] = useState<ResolvedPhilosopher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<PhilosopherId | null>(null);
   const navigate = useNavigate();
-  const handleStartChat = () => navigate("/login");
+
+  const handleStartChat = (philosopher?: ResolvedPhilosopher) => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    // 로그인된 사용자는 채팅방으로 이동 (추후 startChat API 또는 첫 대화 생성)
+    navigate("/chats/new", { state: { philosopherId: philosopher?.id } });
+  };
 
   const selectedPhilosopher = philosophers.find((p) => p.id === selectedId);
   const handleUpdatePhilosopher = useCallback((updated: ResolvedPhilosopher) => {
@@ -96,7 +105,7 @@ export function HomePage() {
             key={philosopher.id}
             philosopher={philosopher}
             onViewDetails={() => setSelectedId(philosopher.id)}
-            onStartChat={handleStartChat}
+            onStartChat={() => handleStartChat(philosopher)}
           />
         ))}
       </section>
