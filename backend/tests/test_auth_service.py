@@ -24,6 +24,7 @@ from app.auth.service import (
     EmailAlreadyRegisteredError,
     EmailNotFoundError,
     EmailNotVerifiedError,
+    InvalidEmailVerificationTokenError,
     InvalidRefreshTokenError,
     PasswordMismatchError,
     authenticate_user,
@@ -32,6 +33,7 @@ from app.auth.service import (
     login_user,
     revoke_refresh_token,
     rotate_refresh_token,
+    verify_email_verification_token,
 )
 
 
@@ -73,6 +75,35 @@ class AuthServiceTests(unittest.TestCase):
             if verified
             else None,
         )
+
+    @patch("app.auth.service.logger")
+    def test_verify_email_logs_success_without_sensitive_data(self, logger) -> None:
+        user = self._login_user(verified=False)
+        verification = Mock(
+            verification_id=uuid4(),
+            user_id=user.user_id,
+        )
+        db = Mock()
+        db.scalar.side_effect = [verification, user, verification]
+
+        verify_email_verification_token(db, "secret-verification-token")
+
+        logger.info.assert_called_once_with("이메일 인증이 완료되었습니다.")
+        logger.warning.assert_not_called()
+
+    @patch("app.auth.service.logger")
+    def test_verify_email_logs_invalid_token_without_sensitive_data(self, logger) -> None:
+        db = Mock()
+        db.scalar.return_value = None
+
+        with self.assertRaises(InvalidEmailVerificationTokenError):
+            verify_email_verification_token(db, "secret-verification-token")
+
+        db.rollback.assert_called_once_with()
+        logger.warning.assert_called_once_with(
+            "유효하지 않거나 만료된 이메일 인증 토큰으로 인증을 시도했습니다."
+        )
+        logger.info.assert_not_called()
 
     @patch("app.auth.service.logger")
     def test_create_user_hashes_password_and_persists_user(self, logger) -> None:

@@ -179,7 +179,14 @@ def verify_email_verification_token(db: Session, token: str) -> None:
         )
 
         db.commit()
+        logger.info("이메일 인증이 완료되었습니다.")
 
+    except InvalidEmailVerificationTokenError:
+        db.rollback()
+        logger.warning(
+            "유효하지 않거나 만료된 이메일 인증 토큰으로 인증을 시도했습니다."
+        )
+        raise
     except Exception:
         db.rollback()
         raise

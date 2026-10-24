@@ -78,6 +78,6 @@ def deliver_email_verification_email(email: str, token: str) -> None:
     try:
         send_email_verification_email(email, token)
     except EmailDeliveryError:
-        logger.exception("Email verification delivery failed")
+        logger.error("이메일 인증 메일 SMTP 전송에 실패했습니다.")
     else:
-        logger.info("Email verification delivery succeeded")
+        logger.info("이메일 인증 메일 SMTP 전송에 성공했습니다.")

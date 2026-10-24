@@ -101,7 +101,7 @@ class AuthRouterTests(unittest.TestCase):
                 "이메일 주소 또는 비밀번호가 일치하지 않습니다.",
             )
 
-    def test_sign_up_creates_and_queues_email_verification_link(self) -> None:
+    def test_sign_up_returns_created_user(self) -> None:
         request = SignUpRequest(
             email="user@example.com", nickname="철학탐험가", password="password123!"
         )
@@ -109,22 +109,13 @@ class AuthRouterTests(unittest.TestCase):
         db = Mock()
         background_tasks = BackgroundTasks()
 
-        with (
-            patch("app.auth.router.create_user", return_value=user) as create,
-            patch(
-                "app.auth.router.create_email_verification", return_value="token"
-            ) as issue,
-        ):
+        with patch("app.auth.router.create_user", return_value=user) as create:
             result = sign_up(request, background_tasks, db)
 
         self.assertEqual(result.email, "user@example.com")
         self.assertEqual(result.nickname, "철학탐험가")
         create.assert_called_once_with(db, request)
-        issue.assert_called_once_with(db, user)
-        self.assertEqual(len(background_tasks.tasks), 1)
-        task = background_tasks.tasks[0]
-        self.assertEqual(task.func.__name__, "deliver_email_verification_email")
-        self.assertEqual(task.args, ("user@example.com", "token"))
+        self.assertEqual(background_tasks.tasks, [])
 
     def test_logout_revokes_refresh_token_and_expires_cookies(self) -> None:
         response = Response()
@@ -146,7 +137,7 @@ class AuthRouterTests(unittest.TestCase):
         self.assertTrue(any(cookie.startswith("accessToken=") for cookie in cookies))
         self.assertTrue(any(cookie.startswith("refreshToken=") for cookie in cookies))
 
-    def test_email_resend_only_queues_for_unverified_user(self) -> None:
+    def test_email_resend_queues_only_when_verification_is_issued(self) -> None:
         request = EmailSendRequest(email="user@example.com")
         user = Mock(email="user@example.com")
         db = Mock()
@@ -154,19 +145,21 @@ class AuthRouterTests(unittest.TestCase):
         background_tasks = BackgroundTasks()
 
         with patch(
-            "app.auth.router.create_email_verification", return_value="new-token"
+            "app.auth.router.create_email_verification",
+            side_effect=[("user@example.com", "new-token"), None],
         ):
             result = send_email_verification_link(request, background_tasks, db)
+            no_account_tasks = BackgroundTasks()
+            no_result = send_email_verification_link(
+                request, no_account_tasks, db
+            )
 
         self.assertIsNone(result)
         self.assertEqual(len(background_tasks.tasks), 1)
         self.assertEqual(
             background_tasks.tasks[0].args, ("user@example.com", "new-token")
         )
-
-        db.scalar.return_value = None
-        no_account_tasks = BackgroundTasks()
-        self.assertIsNone(send_email_verification_link(request, no_account_tasks, db))
+        self.assertIsNone(no_result)
         self.assertEqual(no_account_tasks.tasks, [])
 
     def test_refresh_rotates_tokens_and_sets_login_compatible_cookies(self) -> None:

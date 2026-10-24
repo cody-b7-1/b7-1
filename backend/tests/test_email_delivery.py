@@ -71,8 +71,23 @@ class EmailDeliveryTests(unittest.TestCase):
         ):
             deliver_email_verification_email("user@example.com", "secret-token")
 
-        self.assertIn("Email verification delivery failed", logs.output[0])
-        self.assertNotIn("secret-token", "\n".join(logs.output))
+        output = "\n".join(logs.output)
+        self.assertIn("이메일 인증 메일 SMTP 전송에 실패했습니다.", output)
+        self.assertNotIn("user@example.com", output)
+        self.assertNotIn("secret-token", output)
+        self.assertNotIn("SMTP unavailable", output)
+
+    def test_background_delivery_logs_smtp_success_without_sensitive_data(self) -> None:
+        with (
+            patch("app.auth.email.send_email_verification_email"),
+            self.assertLogs("app.auth.email", level="INFO") as logs,
+        ):
+            deliver_email_verification_email("user@example.com", "secret-token")
+
+        output = "\n".join(logs.output)
+        self.assertIn("이메일 인증 메일 SMTP 전송에 성공했습니다.", output)
+        self.assertNotIn("user@example.com", output)
+        self.assertNotIn("secret-token", output)
 
 
 if __name__ == "__main__":
