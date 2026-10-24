@@ -1,7 +1,7 @@
 import { createBrowserRouter } from "react-router";
 
 import { AuthLayout, authLayoutLoader } from "@/layouts/auth-layout";
-import { RootLayout } from "@/layouts/root-layout";
+import { RootLayout, rootLayoutLoader } from "@/layouts/root-layout";
 import { ChatPage } from "@/pages/chat-page";
 import { HomePage } from "@/pages/home-page";
 import { LoginPage } from "@/pages/login-page";
@@ -12,6 +12,7 @@ import { VerifyEmailPage } from "@/pages/verify-email-page";
 export const router = createBrowserRouter([
   {
     element: <RootLayout />,
+    loader: rootLayoutLoader,
     children: [
       { path: "/", element: <HomePage /> },
       // 백엔드 명세에 맞춘 채팅방 상세 경로 (/chats/{chatId})
