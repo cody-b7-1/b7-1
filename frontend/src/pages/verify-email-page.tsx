@@ -10,11 +10,12 @@ import {
 } from "@/components/ui/card";
 import { VerifyEmailErrorCard } from "@/components/verify-email-error-card";
 import { VerifyEmailSuccessCard } from "@/components/verify-email-success-card";
-import { verifyEmailToken } from "@/lib/api";
+import { ApiError, verifyEmailToken } from "@/lib/api";
 
 type VerifyResult = {
   token: string;
   status: "success" | "error";
+  isRateLimited?: boolean;
 };
 
 export function VerifyEmailPage() {
@@ -39,9 +40,10 @@ export function VerifyEmailPage() {
           setResult({ token, status: "success" });
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (verifiedTokenRef.current === token) {
-          setResult({ token, status: "error" });
+          const isRateLimited = error instanceof ApiError && error.status === 429;
+          setResult({ token, status: "error", isRateLimited });
         }
       });
   }, [token]);
@@ -50,7 +52,8 @@ export function VerifyEmailPage() {
     return <VerifyEmailErrorCard />;
   }
 
-  const status = result?.token === token ? result.status : "loading";
+  const isCurrentToken = result?.token === token;
+  const status = isCurrentToken ? result.status : "loading";
 
   if (status === "loading") {
     return (
@@ -76,5 +79,5 @@ export function VerifyEmailPage() {
     return <VerifyEmailSuccessCard />;
   }
 
-  return <VerifyEmailErrorCard />;
+  return <VerifyEmailErrorCard isRateLimited={result?.isRateLimited} />;
 }

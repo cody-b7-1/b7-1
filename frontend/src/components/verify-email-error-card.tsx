@@ -25,6 +25,10 @@ type VerifyEmailLocationState = {
   email?: string;
 };
 
+interface VerifyEmailErrorCardProps {
+  isRateLimited?: boolean;
+}
+
 function toResendErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 404) return "등록된 사용자를 찾을 수 없습니다.";
@@ -38,7 +42,7 @@ function toResendErrorMessage(error: unknown): string {
   return "인증 메일 전송 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
-export function VerifyEmailErrorCard() {
+export function VerifyEmailErrorCard({ isRateLimited = false }: VerifyEmailErrorCardProps) {
   const location = useLocation();
   const defaultEmail = (location.state as VerifyEmailLocationState | null)?.email ?? "";
 
@@ -86,12 +90,22 @@ export function VerifyEmailErrorCard() {
         </div>
         <div className="flex flex-col gap-2">
           <CardTitle className="text-2xl font-bold tracking-tight">
-            인증 링크를 확인할 수 없어요
+            {isRateLimited ? "인증 요청이 너무 많아요" : "인증 링크를 확인할 수 없어요"}
           </CardTitle>
           <CardDescription className="text-[14px] leading-relaxed break-keep text-muted-foreground">
-            링크가 잘못되었거나 유효 기간이 지났어요. 받은 메일의
-            <br className="hidden sm:inline" /> 링크를 다시 눌러 보거나, 인증
-            메일을 다시 받아 주세요.
+            {isRateLimited ? (
+              <>
+                짧은 시간 동안 너무 많은 인증 시도가 있었어요.
+                <br className="hidden sm:inline" /> 잠시 기다린 후 다시 접속하거나,
+                새 인증 메일을 요청해 주세요.
+              </>
+            ) : (
+              <>
+                링크가 잘못되었거나 유효 기간이 지났어요. 받은 메일의
+                <br className="hidden sm:inline" /> 링크를 다시 눌러 보거나, 인증
+                메일을 다시 받아 주세요.
+              </>
+            )}
           </CardDescription>
         </div>
       </CardHeader>
