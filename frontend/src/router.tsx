@@ -1,7 +1,8 @@
 import { createBrowserRouter } from "react-router";
 
-import { AuthLayout, authLayoutLoader } from "@/layouts/auth-layout";
-import { RootLayout, rootLayoutLoader } from "@/layouts/root-layout";
+import { AuthLayout } from "@/layouts/auth-layout";
+import { authLayoutLoader, rootLayoutLoader } from "@/layouts/loaders";
+import { RootLayout } from "@/layouts/root-layout";
 import { ChatPage } from "@/pages/chat-page";
 import { HomePage } from "@/pages/home-page";
 import { LoginPage } from "@/pages/login-page";

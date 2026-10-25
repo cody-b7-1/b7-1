@@ -41,8 +41,6 @@ export function PhilosopherDetailDialog({
     const controller = new AbortController();
     const { signal } = controller;
 
-    setError("");
-
     async function loadPhilosopher() {
       try {
         const detail = await getPhilosopher(philosopherId, signal);

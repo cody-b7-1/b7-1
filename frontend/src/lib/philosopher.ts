@@ -23,3 +23,9 @@ export const withDefaults = (p: PhilosopherDetailed): ResolvedPhilosopher => ({
   inkColor: p.inkColor ?? DEFAULTS.inkColor,
   softColor: p.softColor ?? DEFAULTS.softColor,
 });
+
+// 정보가 없는 철학자를 그릴 때 쓰는 기본 모습
+export const placeholderPhilosopher = (
+  id: PhilosopherDetailed["id"],
+  name: string,
+): ResolvedPhilosopher => ({ id, name, ...DEFAULTS });

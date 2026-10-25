@@ -38,9 +38,6 @@ export function HomePage() {
     const controller = new AbortController();
     const { signal } = controller;
 
-    setLoading(true);
-    setError("");
-
     async function loadPhilosophers() {
       try {
         const list = await getPhilosopherList(signal);
