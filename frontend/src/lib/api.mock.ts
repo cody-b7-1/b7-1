@@ -113,8 +113,14 @@ const answerOf = (philosopherId: number, prompt: string) => {
   );
 };
 
-const startChat = ({ prompt, philosopherId }: MessageBody): StartChatResponse => {
-  const messages = [newMessage("USER", prompt), answerOf(philosopherId, prompt)];
+const startChat = ({
+  prompt,
+  philosopherId,
+}: MessageBody): StartChatResponse => {
+  const messages = [
+    newMessage("USER", prompt),
+    answerOf(philosopherId, prompt),
+  ];
   const now = new Date().toISOString();
   const chat: MockChat = {
     chatId: crypto.randomUUID(),
@@ -128,11 +134,16 @@ const startChat = ({ prompt, philosopherId }: MessageBody): StartChatResponse =>
   return { chatId: chat.chatId, chatTitle: chat.chatTitle, messages };
 };
 
-const sendMessage = (chatId: string, { prompt, philosopherId }: MessageBody): SendMessageResponse => {
+const sendMessage = (
+  chatId: string,
+  { prompt, philosopherId }: MessageBody,
+): SendMessageResponse => {
   const chat = findChat(chatId);
   const messages = [newMessage("USER", prompt)];
   if (philosopherId !== chat.currentPhilosopherId) {
-    messages.push(newMessage("SYSTEM", "철학자를 변경하였습니다."));
+    messages.push(
+      newMessage("SYSTEM", "철학자를 변경하였습니다.", philosopherId),
+    );
   }
   messages.push(answerOf(philosopherId, prompt));
 
@@ -143,7 +154,10 @@ const sendMessage = (chatId: string, { prompt, philosopherId }: MessageBody): Se
   return { messages };
 };
 
-const getChatList = (limit: number, cursor: string | null): CursorPage<ChatSummary> => {
+const getChatList = (
+  limit: number,
+  cursor: string | null,
+): CursorPage<ChatSummary> => {
   const start = cursor ? chats.findIndex((c) => c.chatId === cursor) + 1 : 0;
   const page = chats.slice(start, start + limit);
   const hasMore = start + limit < chats.length;
@@ -159,9 +173,15 @@ const getChatList = (limit: number, cursor: string | null): CursorPage<ChatSumma
 };
 
 // cursor 메시지보다 오래된 메시지 중 최신 limit개를 시간 오름차순으로
-const getChat = (chatId: string, limit: number, cursor: string | null): ChatDetailed => {
+const getChat = (
+  chatId: string,
+  limit: number,
+  cursor: string | null,
+): ChatDetailed => {
   const { messages, ...chat } = findChat(chatId);
-  const end = cursor ? messages.findIndex((m) => m.messageId === cursor) : messages.length;
+  const end = cursor
+    ? messages.findIndex((m) => m.messageId === cursor)
+    : messages.length;
   if (end < 0) throw new ApiError(404, null);
   const start = Math.max(0, end - limit);
   const hasMore = start > 0;
@@ -174,7 +194,11 @@ const getChat = (chatId: string, limit: number, cursor: string | null): ChatDeta
 };
 
 // undefined를 반환하면 실제 요청으로 넘어감
-export function getMockResponse(method: string, path: string, body?: unknown): unknown {
+export function getMockResponse(
+  method: string,
+  path: string,
+  body?: unknown,
+): unknown {
   const { pathname, searchParams } = new URL(path, "http://mock");
   const limit = searchParams.get("limit");
   const cursor = searchParams.get("cursor");
@@ -201,8 +225,10 @@ export function getMockResponse(method: string, path: string, body?: unknown): u
     return philosopherDetailed;
   }
 
-  if (method === "POST" && pathname === "/chats") return startChat(body as MessageBody);
-  if (method === "GET" && pathname === "/chats") return getChatList(Number(limit ?? 20), cursor);
+  if (method === "POST" && pathname === "/chats")
+    return startChat(body as MessageBody);
+  if (method === "GET" && pathname === "/chats")
+    return getChatList(Number(limit ?? 20), cursor);
 
   const matchedMessages = pathname.match(/^\/chats\/([^/]+)\/messages$/);
   if (method === "POST" && matchedMessages) {
