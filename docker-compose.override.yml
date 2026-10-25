@@ -16,4 +16,4 @@ services:
 
   web:
     volumes:
-      - ./frontend/public/img:/srv/img:ro
+      - ./frontend/public/img:/home/ubuntu/img:ro

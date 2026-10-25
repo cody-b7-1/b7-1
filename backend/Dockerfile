@@ -1,3 +1,4 @@
+
 FROM python:3.12-slim
 
 # uv 설치
@@ -13,7 +14,7 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev
 
-# 애플리케이션 및 마이그레이션 코드
+# 애플리케이션 코드
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./

@@ -59,7 +59,7 @@ services:
     logging: *default-logging
     volumes:
       - ./infra/caddy:/etc/caddy:ro
-      - ${IMG_DIR:-/home/ubuntu/img}:/srv/img:ro
+      - /home/ubuntu/img:/home/ubuntu/img:ro
 
 volumes:
   mariadb_data:
