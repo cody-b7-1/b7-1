@@ -54,6 +54,7 @@ class AuthRouterTests(unittest.IsolatedAsyncioTestCase):
                 "app.auth.router.login_user",
                 return_value=("access-token", refresh_token),
             ) as login_service,
+            patch("app.auth.router.settings.https_enabled", True),
         ):
             result = login(
                 LoginRequest(email="user@example.com", password="password123!"),
@@ -210,10 +211,13 @@ class AuthRouterTests(unittest.IsolatedAsyncioTestCase):
         response = Response()
         db = Mock()
 
-        with patch(
-            "app.auth.router.rotate_refresh_token",
-            return_value=("new-access-token", "new-refresh-token"),
-        ) as rotate:
+        with (
+            patch(
+                "app.auth.router.rotate_refresh_token",
+                return_value=("new-access-token", "new-refresh-token"),
+            ) as rotate,
+            patch("app.auth.router.settings.https_enabled", True),
+        ):
             result = refresh_access_token(
                 response=response,
                 db=db,
