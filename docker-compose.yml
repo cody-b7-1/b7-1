@@ -54,10 +54,12 @@ services:
     build:
       context: ./frontend
     ports:
+      - 80:80
       - 443:443
     logging: *default-logging
     volumes:
       - ./infra/caddy:/etc/caddy:ro
+      - /home/ubuntu/img:/home/ubuntu/img:ro
 
 volumes:
   mariadb_data:

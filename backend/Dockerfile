@@ -16,6 +16,8 @@ RUN uv sync --locked --no-dev
 
 # 애플리케이션 코드
 COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./
 
 EXPOSE 8000
 
