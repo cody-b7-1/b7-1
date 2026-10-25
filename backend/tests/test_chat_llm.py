@@ -5,11 +5,13 @@ from unittest.mock import MagicMock
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
+from openai import APIConnectionError, APITimeoutError
+
+import app.db.model_registry  # noqa: F401  (모든 ORM 매퍼 등록)
 from app.chats.enums import SenderRole
 from app.chats.exceptions import ChatAIUnavailableError
 from app.chats.llm import LLMService, _build_system_prompt, _format_chat_history
 from app.chats.models.message import Message
-from openai import APIConnectionError, APITimeoutError
 
 
 class LLMServiceTests(unittest.TestCase):
@@ -36,6 +38,7 @@ class LLMServiceTests(unittest.TestCase):
             ),
             Message(
                 sender_role=SenderRole.PHILOSOPHER,
+                philosopher_id=1,
                 content="반갑습니다.",
             ),
             Message(
@@ -44,7 +47,7 @@ class LLMServiceTests(unittest.TestCase):
             ),
         ]
 
-        formatted = _format_chat_history(messages)
+        formatted = _format_chat_history(messages, current_philosopher_id=1)
         self.assertEqual(len(formatted), 3)
         self.assertEqual(formatted[0], {"role": "user", "content": "안녕하세요"})
         self.assertEqual(formatted[1], {"role": "assistant", "content": "반갑습니다."})
@@ -52,6 +55,24 @@ class LLMServiceTests(unittest.TestCase):
             formatted[2],
             {"role": "system", "content": "[시스템 안내: 대화 상대가 변경되었습니다.]"},
         )
+
+    def test_format_chat_history_marks_previous_philosopher_answers(self) -> None:
+        messages = [
+            Message(
+                sender_role=SenderRole.PHILOSOPHER,
+                philosopher_id=1,
+                content="허허, 세상이란 연극 무대이지요.",
+            ),
+            Message(
+                sender_role=SenderRole.PHILOSOPHER,
+                philosopher_id=3,
+                content="그대여, 스스로의 가치를 세워라!",
+            ),
+        ]
+
+        formatted = _format_chat_history(messages, current_philosopher_id=3)
+        self.assertIn("이전 철학자의 답변", formatted[0]["content"])
+        self.assertEqual(formatted[1]["content"], "그대여, 스스로의 가치를 세워라!")
 
     def test_generate_chat_answer_success(self) -> None:
         mock_choice = MagicMock()
