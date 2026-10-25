@@ -17,6 +17,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    https_enabled: bool = False
+
     db_host: str
     db_port: int = 3306
     db_user: str

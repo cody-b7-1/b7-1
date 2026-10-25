@@ -66,7 +66,7 @@ def _set_token_cookies(
         value=access_token,
         max_age=access_token_max_age,
         httponly=True,
-        secure=True,
+        secure=settings.https_enabled,
         samesite="lax",
         path="/api",
     )
@@ -75,7 +75,7 @@ def _set_token_cookies(
         value=refresh_token,
         max_age=refresh_token_max_age,
         httponly=True,
-        secure=True,
+        secure=settings.https_enabled,
         samesite="lax",
         path="/api/auth",
     )
@@ -425,7 +425,12 @@ def logout(
         revoke_refresh_token(db, original_token)
 
     # 쿠키 삭제
-    response.delete_cookie(key="accessToken", path="/api", secure=True, httponly=True)
     response.delete_cookie(
-        key="refreshToken", path="/api/auth", secure=True, httponly=True
+        key="accessToken", path="/api", secure=settings.https_enabled, httponly=True
+    )
+    response.delete_cookie(
+        key="refreshToken",
+        path="/api/auth",
+        secure=settings.https_enabled,
+        httponly=True,
     )
