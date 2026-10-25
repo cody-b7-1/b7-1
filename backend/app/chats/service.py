@@ -62,7 +62,9 @@ class ChatService:
             self.db.refresh(chat, with_for_update={"nowait": True})
         except OperationalError as exc:
             if _is_lock_not_available(exc):
-                logger.warning("채팅방 잠금 획득에 실패했습니다. chat_id=%s", chat.chat_id)
+                logger.warning(
+                    "채팅방 잠금 획득에 실패했습니다. chat_id=%s", chat.chat_id
+                )
                 raise ChatBusyError() from exc
             raise  # 잠금 실패가 아닌 다른 DB 오류는 그대로 상위로 전달
 
@@ -293,7 +295,7 @@ class ChatService:
             system_message = Message(
                 message_id=uuid4(),
                 chat_id=chat.chat_id,
-                philosopher_id=None,
+                philosopher_id=philosopher.id,
                 sender_role=SenderRole.SYSTEM,
                 content=f"대화 상대가 {philosopher.name}(으)로 변경되었습니다.",
                 created_at=now,
