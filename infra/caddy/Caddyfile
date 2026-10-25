@@ -1,4 +1,4 @@
-localhost {
+:80 {
   encode
   handle /api/* {
     reverse_proxy backend:8000

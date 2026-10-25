@@ -13,3 +13,7 @@ services:
   mariadb:
     ports:
       - "${DB_PORT:-3306}:3306"
+
+  web:
+    volumes:
+      - ./frontend/public/img:/srv/img:ro
