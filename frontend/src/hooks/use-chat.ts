@@ -1,10 +1,11 @@
-// 대화방 데이터: 철학자·대화 목록, 현재 대화의 메시지 불러오기와 메시지 전송
+// 대화방 데이터: 철학자·대화 목록, 현재 대화의 메시지 불러오기와 메시지 전송, 삭제 및 페이징
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import {
   ApiError,
+  deleteChat as apiDeleteChat,
   getChat,
   getChatList,
   getPhilosopherList,
@@ -31,6 +32,20 @@ const SEND_ERRORS: Record<number, string> = {
 const isUnauthorized = (e: unknown) =>
   e instanceof ApiError && e.status === 401;
 
+type CursorPageState<T> = {
+  items: T[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  loadingMore: boolean;
+};
+
+const emptyPageState = <T,>(): CursorPageState<T> => ({
+  items: [],
+  hasMore: false,
+  nextCursor: null,
+  loadingMore: false,
+});
+
 export function useChat(
   user: User | null,
   chatId: string | undefined,
@@ -38,8 +53,13 @@ export function useChat(
 ) {
   const navigate = useNavigate();
   const [philosophers, setPhilosophers] = useState<ResolvedPhilosopher[]>([]);
-  const [chats, setChats] = useState<ChatSummary[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatPage, setChatPage] = useState<CursorPageState<ChatSummary>>(
+    emptyPageState,
+  );
+  const [messagePage, setMessagePage] = useState<CursorPageState<Message>>(
+    emptyPageState,
+  );
+
   const [current, setCurrent] = useState(startPhilosopherId);
   // 화면에 보이는 messages가 어느 대화의 것인지. chatId와 다르면 불러오는 중
   const [loadedChatId, setLoadedChatId] = useState<string>();
@@ -57,22 +77,76 @@ export function useChat(
     setShownFor({ chatId, startPhilosopherId });
     setLoadError("");
     if (!chatId) {
-      setMessages([]);
+      setMessagePage(emptyPageState());
       setCurrent(startPhilosopherId);
+    } else {
+      setMessagePage((prev) => ({
+        ...prev,
+        hasMore: false,
+        nextCursor: null,
+        loadingMore: false,
+      }));
     }
   }
 
-  const philosopherOf = (id: PhilosopherId | null) =>
-    philosophers.find((p) => p.id === id) ??
-    // 목록에 없는(비활성화된) 철학자의 메시지도 그릴 수 있도록 기본값으로 채움
-    placeholderPhilosopher(id ?? 0, "알 수 없는 철학자");
+  const philosopherOf = useCallback(
+    (id: PhilosopherId | null) =>
+      philosophers.find((p) => p.id === id) ??
+      // 목록에 없는(비활성화된) 철학자의 메시지도 그릴 수 있도록 기본값으로 채움
+      placeholderPhilosopher(id ?? 0, "알 수 없는 철학자"),
+    [philosophers],
+  );
   const currentInfo =
     philosophers.find((p) => p.id === current) ?? philosophers[0];
   const others = philosophers.filter((p) => p.id !== currentInfo?.id);
-  const loadChats = () =>
-    getChatList()
-      .then((page) => setChats(page.items))
-      .catch((e) => console.error("대화 목록 조회 중 오류 발생:", e));
+
+  const loadChats = useCallback(
+    () =>
+      getChatList()
+        .then((page) => {
+          setChatPage({
+            items: page.items,
+            hasMore: page.hasMore,
+            nextCursor: page.nextCursor,
+            loadingMore: false,
+          });
+        })
+        .catch((e) => {
+          if (isUnauthorized(e)) {
+            void navigate("/login");
+            return;
+          }
+          console.error("대화 목록 조회 중 오류 발생:", e);
+        }),
+    [navigate],
+  );
+
+  const {
+    hasMore: hasMoreChats,
+    nextCursor: nextChatCursor,
+    loadingMore: loadingMoreChats,
+  } = chatPage;
+
+  const loadMoreChats = useCallback(async () => {
+    if (!hasMoreChats || !nextChatCursor || loadingMoreChats) return;
+    setChatPage((prev) => ({ ...prev, loadingMore: true }));
+    try {
+      const page = await getChatList({ cursor: nextChatCursor });
+      setChatPage((prev) => ({
+        items: [...prev.items, ...page.items],
+        hasMore: page.hasMore,
+        nextCursor: page.nextCursor,
+        loadingMore: false,
+      }));
+    } catch (e) {
+      if (isUnauthorized(e)) {
+        void navigate("/login");
+        return;
+      }
+      console.error("이전 대화 목록 추가 조회 중 오류 발생:", e);
+      setChatPage((prev) => ({ ...prev, loadingMore: false }));
+    }
+  }, [hasMoreChats, nextChatCursor, loadingMoreChats, navigate]);
 
   useEffect(() => {
     if (!user) return;
@@ -80,7 +154,7 @@ export function useChat(
       .then((list) => setPhilosophers(list.map(withDefaults)))
       .catch(() => setLoadError("failed"));
     void loadChats();
-  }, [user]);
+  }, [user, loadChats]);
 
   useEffect(() => {
     chatIdRef.current = chatId;
@@ -89,7 +163,12 @@ export function useChat(
     getChat(chatId)
       .then((chat) => {
         if (ignore) return;
-        setMessages(chat.messages);
+        setMessagePage({
+          items: chat.messages,
+          hasMore: chat.hasMore,
+          nextCursor: chat.nextCursor,
+          loadingMore: false,
+        });
         setCurrent(chat.currentPhilosopherId);
         setLoadedChatId(chatId);
       })
@@ -106,57 +185,135 @@ export function useChat(
     };
   }, [chatId, user, navigate]);
 
-  // 실패하면 입력창에 보여줄 안내 문구를 돌려줌
-  async function send(prompt: string): Promise<string | undefined> {
-    if (waiting || !currentInfo) return;
-    const body = { philosopherId: currentInfo.id, prompt };
-    const sentFrom = chatId;
-    // 응답이 오기 전까지 사용자 메시지를 먼저 보여줌
-    const pending: Message = {
-      messageId: "pending",
-      senderRole: "USER",
-      philosopherId: null,
-      content: prompt,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((m) => [...m, pending]);
-    setWaiting(true);
+  const {
+    hasMore: hasMoreMessages,
+    nextCursor: nextMessageCursor,
+    loadingMore: loadingMoreMessages,
+  } = messagePage;
+
+  const loadMoreMessages = useCallback(async () => {
+    if (!chatId || !hasMoreMessages || !nextMessageCursor || loadingMoreMessages)
+      return;
+    setMessagePage((prev) => ({ ...prev, loadingMore: true }));
     try {
-      if (sentFrom) {
-        const res = await sendMessage(sentFrom, body);
-        if (chatIdRef.current !== sentFrom) return;
-        setMessages((m) => [
-          ...m.filter((x) => x !== pending),
-          ...res.messages,
-        ]);
-      } else {
-        const res = await startChat(body);
-        if (chatIdRef.current !== sentFrom) return;
-        setMessages(res.messages);
-        setLoadedChatId(res.chatId);
-        navigate(`/chats/${res.chatId}`, { replace: true });
-      }
-      void loadChats();
+      const chat = await getChat(chatId, { cursor: nextMessageCursor });
+      if (chatIdRef.current !== chatId) return;
+      // 이전 메시지를 앞쪽에 추가 (시간 오름차순 유지)
+      setMessagePage((prev) => ({
+        items: [...chat.messages, ...prev.items],
+        hasMore: chat.hasMore,
+        nextCursor: chat.nextCursor,
+        loadingMore: false,
+      }));
     } catch (e) {
       if (isUnauthorized(e)) {
         void navigate("/login");
         return;
       }
-      if (chatIdRef.current !== sentFrom) return;
-      setMessages((m) => m.filter((x) => x !== pending));
-      return (
-        (e instanceof ApiError && SEND_ERRORS[e.status]) ||
-        "메시지를 보내지 못했어요. 잠시 후 다시 시도해 주세요."
-      );
-    } finally {
-      setWaiting(false);
+      console.error("이전 메시지 추가 조회 중 오류 발생:", e);
+      setMessagePage((prev) => ({ ...prev, loadingMore: false }));
     }
-  }
+  }, [chatId, hasMoreMessages, nextMessageCursor, loadingMoreMessages, navigate]);
+
+  const removeChat = useCallback(
+    async (targetChatId: string) => {
+      try {
+        await apiDeleteChat(targetChatId);
+        setChatPage((prev) => ({
+          ...prev,
+          items: prev.items.filter((c) => c.chatId !== targetChatId),
+        }));
+        // 현재 열려있는 대화를 삭제한 경우 새 대화(/chats/new) 페이지로 이동
+        if (chatId === targetChatId) {
+          navigate("/chats/new", { replace: true });
+        }
+      } catch (e) {
+        if (isUnauthorized(e)) {
+          void navigate("/login");
+          return;
+        }
+        console.error("대화 삭제 중 오류 발생:", e);
+        alert("대화를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+    },
+    [chatId, navigate],
+  );
+
+  // 실패하면 입력창에 보여줄 안내 문구를 돌려줌
+  const send = useCallback(
+    async (prompt: string): Promise<string | undefined> => {
+      if (waiting || !currentInfo) return;
+      const body = { philosopherId: currentInfo.id, prompt };
+      const sentFrom = chatId;
+      // 응답이 오기 전까지 사용자 메시지를 먼저 보여줌
+      const pending: Message = {
+        messageId: "pending",
+        senderRole: "USER",
+        philosopherId: null,
+        content: prompt,
+        createdAt: new Date().toISOString(),
+      };
+      setMessagePage((prev) => ({
+        ...prev,
+        items: [...prev.items, pending],
+      }));
+      setWaiting(true);
+      try {
+        if (sentFrom) {
+          const res = await sendMessage(sentFrom, body);
+          if (chatIdRef.current !== sentFrom) return;
+          setMessagePage((prev) => ({
+            ...prev,
+            items: [
+              ...prev.items.filter((x) => x !== pending),
+              ...res.messages,
+            ],
+          }));
+        } else {
+          const res = await startChat(body);
+          if (chatIdRef.current !== sentFrom) return;
+          setMessagePage({
+            items: res.messages,
+            hasMore: false,
+            nextCursor: null,
+            loadingMore: false,
+          });
+          setLoadedChatId(res.chatId);
+          navigate(`/chats/${res.chatId}`, { replace: true });
+        }
+        void loadChats();
+      } catch (e) {
+        if (isUnauthorized(e)) {
+          void navigate("/login");
+          return;
+        }
+        if (chatIdRef.current !== sentFrom) return;
+        setMessagePage((prev) => ({
+          ...prev,
+          items: prev.items.filter((x) => x !== pending),
+        }));
+        return (
+          (e instanceof ApiError && SEND_ERRORS[e.status]) ||
+          "메시지를 보내지 못했어요. 잠시 후 다시 시도해 주세요."
+        );
+      } finally {
+        setWaiting(false);
+      }
+    },
+    [waiting, currentInfo, chatId, navigate, loadChats],
+  );
 
   return {
     philosophers,
-    chats,
-    messages,
+    chats: chatPage.items,
+    hasMoreChats,
+    loadingMoreChats,
+    loadMoreChats,
+    messages: messagePage.items,
+    hasMoreMessages,
+    loadingMoreMessages,
+    loadMoreMessages,
+    removeChat,
     currentInfo,
     others,
     philosopherOf,

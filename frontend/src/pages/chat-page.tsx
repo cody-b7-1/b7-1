@@ -31,7 +31,14 @@ export function ChatPage() {
   const {
     philosophers,
     chats,
+    hasMoreChats,
+    loadingMoreChats,
+    loadMoreChats,
     messages,
+    hasMoreMessages,
+    loadingMoreMessages,
+    loadMoreMessages,
+    removeChat,
     currentInfo,
     others,
     philosopherOf,
@@ -43,6 +50,8 @@ export function ChatPage() {
   } = useChat(user, chatId, startPhilosopherId);
   // 철학자 선택 모달: 현재 대화에서 전환하거나, 새 대화를 시작
   const [dialog, setDialog] = useState<"switch" | "new" | null>(null);
+  // 모바일 사이드바 열림 상태
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -54,9 +63,15 @@ export function ChatPage() {
       <ChatSidebar
         chats={chats}
         activeChatId={chatId}
+        hasMoreChats={hasMoreChats}
+        loadingMoreChats={loadingMoreChats}
+        onLoadMoreChats={loadMoreChats}
+        onDeleteChat={removeChat}
         philosopherOf={philosopherOf}
         onNewChat={() => setDialog("new")}
         newChatDisabled={philosophers.length === 0}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -92,12 +107,16 @@ export function ChatPage() {
               others={others}
               onSwitch={() => setDialog("switch")}
               switchDisabled={waiting || others.length === 0}
+              onOpenSidebar={() => setSidebarOpen(true)}
             />
             <ChatMessages
               messages={messages}
               current={currentInfo}
               philosopherOf={philosopherOf}
               waiting={waiting}
+              hasMoreMessages={hasMoreMessages}
+              loadingMoreMessages={loadingMoreMessages}
+              onLoadMoreMessages={loadMoreMessages}
             />
             <ChatInput
               key={chatId}

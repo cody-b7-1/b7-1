@@ -1,6 +1,8 @@
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, memo, useEffect, useLayoutEffect, useRef } from "react";
+import { Loader2 } from "lucide-react";
 
 import { PhilosopherAvatar } from "@/components/philosopher-avatar";
+import { Button } from "@/components/ui/button";
 import type { Message, PhilosopherId } from "@/lib/api";
 import type { ResolvedPhilosopher } from "@/lib/philosopher";
 
@@ -9,6 +11,9 @@ type Props = {
   current: ResolvedPhilosopher;
   philosopherOf: (id: PhilosopherId | null) => ResolvedPhilosopher;
   waiting: boolean;
+  hasMoreMessages?: boolean;
+  loadingMoreMessages?: boolean;
+  onLoadMoreMessages?: () => void;
 };
 
 function SwitchDivider({
@@ -38,16 +43,50 @@ function SwitchDivider({
   );
 }
 
-// 대화 내역 (철학자 전환 구분선, 응답 대기 표시 포함)
-export function ChatMessages({
+// 대화 내역 (철학자 전환 구분선, 이전 메시지 더보기 페이징, 응답 대기 표시 포함)
+export const ChatMessages = memo(function ChatMessages({
   messages,
   current,
   philosopherOf,
   waiting,
+  hasMoreMessages = false,
+  loadingMoreMessages = false,
+  onLoadMoreMessages,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const prevLastMessageIdRef = useRef<string | undefined>(undefined);
+  const prevScrollHeightRef = useRef<number | null>(null);
 
+  const handleLoadMoreClick = () => {
+    if (containerRef.current) {
+      prevScrollHeightRef.current = containerRef.current.scrollHeight;
+    }
+    onLoadMoreMessages?.();
+  };
+
+  // 이전 메시지를 위로 불러온 직후 보고 있던 스크롤 위치를 자연스럽게 유지
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (prevScrollHeightRef.current !== null && container) {
+      const heightDiff = container.scrollHeight - prevScrollHeightRef.current;
+      container.scrollTop += heightDiff;
+      prevScrollHeightRef.current = null;
+    }
+  }, [messages]);
+
+  // 첫 진입 시 또는 새 메시지가 아래에 추가되었을 때 맨 아래로 스크롤
   useEffect(() => {
+    const currentLastId = messages.at(-1)?.messageId;
+    const isPrepended =
+      messages.length > 0 &&
+      prevLastMessageIdRef.current !== undefined &&
+      prevLastMessageIdRef.current === currentLastId &&
+      !waiting;
+
+    prevLastMessageIdRef.current = currentLastId;
+    if (isPrepended) return;
+
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages, waiting]);
 
@@ -59,11 +98,36 @@ export function ChatMessages({
     lastPhilosopherId != null && lastPhilosopherId !== current.id;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div
+      ref={containerRef}
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+    >
       <div
         className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-6 py-8"
         aria-live="polite"
       >
+        {/* 이전 메시지 더보기 버튼 */}
+        {hasMoreMessages && (
+          <div className="flex justify-center pb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-full px-4 text-xs text-muted-foreground"
+              onClick={handleLoadMoreClick}
+              disabled={loadingMoreMessages}
+            >
+              {loadingMoreMessages ? (
+                <>
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                  이전 대화 불러오는 중…
+                </>
+              ) : (
+                "이전 대화 더보기"
+              )}
+            </Button>
+          </div>
+        )}
+
         {messages.length === 0 && (
           <p className="m-auto text-center text-muted-foreground">
             {current.name}에게 지금의 고민을 들려주세요.
@@ -126,4 +190,4 @@ export function ChatMessages({
       <div ref={endRef} />
     </div>
   );
-}
+});
