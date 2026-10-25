@@ -139,12 +139,13 @@ const sendMessage = (
   { prompt, philosopherId }: MessageBody,
 ): SendMessageResponse => {
   const chat = findChat(chatId);
-  const messages = [newMessage("USER", prompt)];
+  const messages = [];
   if (philosopherId !== chat.currentPhilosopherId) {
     messages.push(
       newMessage("SYSTEM", "철학자를 변경하였습니다.", philosopherId),
     );
   }
+  messages.push(newMessage("USER", prompt));
   messages.push(answerOf(philosopherId, prompt));
 
   chat.messages.push(...messages);
