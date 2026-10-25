@@ -83,7 +83,8 @@ export function ChatPage() {
   const [draft, setDraft] = useState("");
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState("");
-  const [switchOpen, setSwitchOpen] = useState(false);
+  // 철학자 선택 모달: 현재 대화에서 전환하거나, 새 대화를 시작
+  const [dialog, setDialog] = useState<"switch" | "new" | null>(null);
   const [picked, setPicked] = useState<PhilosopherId | null>(null);
   // 응답을 기다리는 사이 다른 대화로 옮겼는지 확인하는 용도
   const chatIdRef = useRef(chatId);
@@ -227,23 +228,27 @@ export function ChatPage() {
 
   function confirmSwitch() {
     if (!picked) return;
-    setCurrent(picked);
-    setSwitchOpen(false);
+    if (dialog === "new")
+      navigate("/chats/new", { state: { philosopherId: picked } });
+    else setCurrent(picked);
+    setDialog(null);
     setPicked(null);
   }
 
   return (
-    <div className="flex flex-1 flex-col border-t md:flex-row">
+    <div
+      data-chat
+      className="flex min-h-0 flex-1 flex-col border-t md:flex-row"
+    >
       {/* 지난 대화 목록 */}
-      <aside className="flex flex-col gap-1.5 border-b bg-card px-4 py-5 md:w-72 md:border-r md:border-b-0">
-        <Link
-          to="/"
-          className={buttonVariants({
-            className: "mb-3 h-11 rounded-xl text-[15px] font-semibold",
-          })}
+      <aside className="flex max-h-48 shrink-0 flex-col gap-1.5 overflow-y-auto border-b bg-card px-4 py-5 md:max-h-none md:w-72 md:border-r md:border-b-0">
+        <Button
+          className="mb-3 h-11 rounded-xl text-[15px] font-semibold"
+          onClick={() => setDialog("new")}
+          disabled={philosophers.length === 0}
         >
           <Plus /> 새 대화
-        </Link>
+        </Button>
         <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">
           지난 대화
         </p>
@@ -283,7 +288,7 @@ export function ChatPage() {
         })}
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         {loadError === "notFound" ? (
           <div className="m-auto flex flex-col items-center gap-4 px-6 py-20 text-center">
             <h1 className="text-2xl font-bold">대화를 찾을 수 없어요</h1>
@@ -334,7 +339,7 @@ export function ChatPage() {
               <Button
                 variant="outline"
                 className="h-11 rounded-full border-foreground pl-2.5 font-semibold"
-                onClick={() => setSwitchOpen(true)}
+                onClick={() => setDialog("switch")}
                 disabled={waiting || others.length === 0}
               >
                 <span className="flex">
@@ -355,73 +360,76 @@ export function ChatPage() {
             </div>
 
             {/* 대화 내역 */}
-            <div
-              className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-6 py-8"
-              aria-live="polite"
-            >
-              {messages.length === 0 && (
-                <p className="m-auto text-center text-muted-foreground">
-                  {currentInfo.name}에게 지금의 고민을 들려주세요.
-                </p>
-              )}
-              {messages.map((m, i) => {
-                if (m.senderRole === "USER")
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <div
+                className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-6 py-8"
+                aria-live="polite"
+              >
+                {messages.length === 0 && (
+                  <p className="m-auto text-center text-muted-foreground">
+                    {currentInfo.name}에게 지금의 고민을 들려주세요.
+                  </p>
+                )}
+                {messages.map((m, i) => {
+                  if (m.senderRole === "USER")
+                    return (
+                      <Fragment key={m.messageId}>
+                        {/* 응답 대기 중엔 서버가 SYSTEM 메시지를 둘 자리(사용자 메시지 앞)에 표시 */}
+                        {pendingSwitch &&
+                          m.messageId === "pending" &&
+                          switchDivider("pending-switch", currentInfo)}
+                        <div className="flex justify-end">
+                          <p className="max-w-[520px] rounded-[18px] rounded-br-sm bg-primary px-[18px] py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap text-primary-foreground">
+                            {m.content}
+                          </p>
+                        </div>
+                      </Fragment>
+                    );
+                  if (m.senderRole === "SYSTEM") {
+                    // SYSTEM 메시지엔 철학자 ID가 없어서 뒤따르는 철학자 답변에서 찾음
+                    const next = messages
+                      .slice(i)
+                      .find((x) => x.senderRole === "PHILOSOPHER");
+                    return switchDivider(
+                      m.messageId,
+                      next && philosopherOf(next.philosopherId),
+                      m.content,
+                    );
+                  }
+                  const info = philosopherOf(m.philosopherId);
                   return (
-                    <Fragment key={m.messageId}>
-                      {/* 응답 대기 중엔 서버가 SYSTEM 메시지를 둘 자리(사용자 메시지 앞)에 표시 */}
-                      {pendingSwitch &&
-                        m.messageId === "pending" &&
-                        switchDivider("pending-switch", currentInfo)}
-                      <div className="flex justify-end">
-                        <p className="max-w-[520px] rounded-[18px] rounded-br-sm bg-primary px-[18px] py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap text-primary-foreground">
+                    <div key={m.messageId} className="flex items-start gap-3">
+                      <PhilosopherAvatar philosopher={info} decorative />
+                      <div className="max-w-[560px]">
+                        <p
+                          className="mb-1.5 text-[13px] font-bold"
+                          style={{ color: info.inkColor }}
+                        >
+                          {info.name}
+                        </p>
+                        <p className="rounded-[18px] rounded-tl-sm border bg-card px-[18px] py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap">
                           {m.content}
                         </p>
                       </div>
-                    </Fragment>
-                  );
-                if (m.senderRole === "SYSTEM") {
-                  // SYSTEM 메시지엔 철학자 ID가 없어서 뒤따르는 철학자 답변에서 찾음
-                  const next = messages
-                    .slice(i)
-                    .find((x) => x.senderRole === "PHILOSOPHER");
-                  return switchDivider(
-                    m.messageId,
-                    next && philosopherOf(next.philosopherId),
-                    m.content,
-                  );
-                }
-                const info = philosopherOf(m.philosopherId);
-                return (
-                  <div key={m.messageId} className="flex items-start gap-3">
-                    <PhilosopherAvatar philosopher={info} decorative />
-                    <div className="max-w-[560px]">
-                      <p
-                        className="mb-1.5 text-[13px] font-bold"
-                        style={{ color: info.inkColor }}
-                      >
-                        {info.name}
-                      </p>
-                      <p className="rounded-[18px] rounded-tl-sm border bg-card px-[18px] py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap">
-                        {m.content}
-                      </p>
                     </div>
+                  );
+                })}
+                {pendingSwitch &&
+                  !waiting &&
+                  switchDivider("pending-switch", currentInfo)}
+                {waiting && (
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <PhilosopherAvatar philosopher={currentInfo} decorative />
+                    생각을 정리하고 있어요…
                   </div>
-                );
-              })}
-              {pendingSwitch &&
-                !waiting &&
-                switchDivider("pending-switch", currentInfo)}
-              {waiting && (
-                <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                  <PhilosopherAvatar philosopher={currentInfo} decorative />
-                  생각을 정리하고 있어요…
-                </div>
-              )}
+                )}
+              </div>
+              <div ref={endRef} />
             </div>
 
             {/* 입력창 */}
             <form
-              className="sticky bottom-0 border-t bg-background"
+              className="border-t bg-background"
               onSubmit={(e) => {
                 e.preventDefault();
                 void send();
@@ -480,20 +488,31 @@ export function ChatPage() {
                 </div>
               </div>
             </form>
-            {/* 입력창에 가려지지 않도록 입력창 아래를 기준으로 스크롤 */}
-            <div ref={endRef} />
           </>
         )}
       </main>
 
       {/* 철학자 전환 창 */}
-      <Dialog open={switchOpen} onOpenChange={setSwitchOpen}>
+      <Dialog
+        open={dialog !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDialog(null);
+            setPicked(null);
+          }
+        }}
+      >
         <DialogContent className="bg-card sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>누구와 이어서 이야기할까요?</DialogTitle>
+            <DialogTitle>
+              {dialog === "new"
+                ? "누구와 새 대화를 시작할까요?"
+                : "누구와 이어서 이야기할까요?"}
+            </DialogTitle>
             <DialogDescription>
-              지금까지의 대화는 그대로 남고, 다음 메시지부터 새 철학자가 같은
-              고민에 이어서 답해요.
+              {dialog === "new"
+                ? "고른 철학자와 새로운 고민을 처음부터 나눠요."
+                : "지금까지의 대화는 그대로 남고, 다음 메시지부터 새 철학자가 같은 고민에 이어서 답해요."}
             </DialogDescription>
           </DialogHeader>
           <div
@@ -501,7 +520,7 @@ export function ChatPage() {
             role="radiogroup"
             aria-label="철학자 선택"
           >
-            {others.map((p) => (
+            {(dialog === "new" ? philosophers : others).map((p) => (
               <button
                 key={p.id}
                 type="button"
@@ -535,7 +554,9 @@ export function ChatPage() {
               disabled={!picked}
               onClick={confirmSwitch}
             >
-              이 철학자와 이어가기
+              {dialog === "new"
+                ? "이 철학자와 시작하기"
+                : "이 철학자와 이어가기"}
             </Button>
           </DialogFooter>
         </DialogContent>

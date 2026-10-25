@@ -37,9 +37,10 @@ export function RootLayout() {
   };
 
   return (
-    <div className="flex min-h-svh flex-col">
+    // 채팅 화면은 높이를 화면에 고정하고 대화창 안에서 스크롤
+    <div className="flex min-h-svh flex-col has-[[data-chat]]:h-svh">
       <SiteHeader email={user?.email} onLogout={handleLogout} />
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         <Outlet context={{ user }} />
       </div>
       <footer className="mx-auto w-full max-w-7xl border-t px-6 pt-6 pb-12 text-[13px] text-muted-foreground md:px-12">
