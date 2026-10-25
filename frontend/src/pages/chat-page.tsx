@@ -1,6 +1,6 @@
 // 대화방 화면 (/chats/new: 새 대화, /chats/{chatId}: 기존 대화)
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { ArrowUp, Plus } from "lucide-react";
 import {
   Link,
@@ -94,6 +94,35 @@ export function ChatPage() {
   const currentInfo =
     philosophers.find((p) => p.id === current) ?? philosophers[0];
   const others = philosophers.filter((p) => p.id !== currentInfo?.id);
+  // 전환 직후 서버의 SYSTEM 메시지가 오기 전에도 구분선을 미리 보여줌
+  const lastPhilosopherId = messages.findLast(
+    (m) => m.senderRole === "PHILOSOPHER",
+  )?.philosopherId;
+  const pendingSwitch =
+    lastPhilosopherId != null && lastPhilosopherId !== currentInfo?.id;
+
+  const switchDivider = (
+    key: string,
+    philosopher: ResolvedPhilosopher | undefined,
+    fallback = "",
+  ) => (
+    <div key={key} className="my-1 flex items-center gap-3">
+      <div className="h-px flex-1 bg-border" />
+      <span className="flex items-center gap-2 rounded-full border bg-card py-1.5 pr-3.5 pl-1.5 text-[13px] text-muted-foreground">
+        {philosopher && (
+          <PhilosopherAvatar
+            philosopher={philosopher}
+            className="size-[22px]"
+            decorative
+          />
+        )}
+        {philosopher
+          ? `${philosopher.name}가 같은 고민을 이어서 들어요`
+          : fallback}
+      </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
 
   const loadChats = () =>
     getChatList()
@@ -338,37 +367,27 @@ export function ChatPage() {
               {messages.map((m, i) => {
                 if (m.senderRole === "USER")
                   return (
-                    <div key={m.messageId} className="flex justify-end">
-                      <p className="max-w-[520px] rounded-[18px] rounded-br-sm bg-primary px-[18px] py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap text-primary-foreground">
-                        {m.content}
-                      </p>
-                    </div>
+                    <Fragment key={m.messageId}>
+                      {/* 응답 대기 중엔 서버가 SYSTEM 메시지를 둘 자리(사용자 메시지 앞)에 표시 */}
+                      {pendingSwitch &&
+                        m.messageId === "pending" &&
+                        switchDivider("pending-switch", currentInfo)}
+                      <div className="flex justify-end">
+                        <p className="max-w-[520px] rounded-[18px] rounded-br-sm bg-primary px-[18px] py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap text-primary-foreground">
+                          {m.content}
+                        </p>
+                      </div>
+                    </Fragment>
                   );
                 if (m.senderRole === "SYSTEM") {
                   // SYSTEM 메시지엔 철학자 ID가 없어서 뒤따르는 철학자 답변에서 찾음
                   const next = messages
                     .slice(i)
                     .find((x) => x.senderRole === "PHILOSOPHER");
-                  return (
-                    <div
-                      key={m.messageId}
-                      className="my-1 flex items-center gap-3"
-                    >
-                      <div className="h-px flex-1 bg-border" />
-                      <span className="flex items-center gap-2 rounded-full border bg-card py-1.5 pr-3.5 pl-1.5 text-[13px] text-muted-foreground">
-                        {next && (
-                          <PhilosopherAvatar
-                            philosopher={philosopherOf(next.philosopherId)}
-                            className="size-[22px]"
-                            decorative
-                          />
-                        )}
-                        {next
-                          ? `${philosopherOf(next.philosopherId).name}가 같은 고민을 이어서 들어요`
-                          : m.content}
-                      </span>
-                      <div className="h-px flex-1 bg-border" />
-                    </div>
+                  return switchDivider(
+                    m.messageId,
+                    next && philosopherOf(next.philosopherId),
+                    m.content,
                   );
                 }
                 const info = philosopherOf(m.philosopherId);
@@ -389,6 +408,9 @@ export function ChatPage() {
                   </div>
                 );
               })}
+              {pendingSwitch &&
+                !waiting &&
+                switchDivider("pending-switch", currentInfo)}
               {waiting && (
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                   <PhilosopherAvatar philosopher={currentInfo} decorative />
