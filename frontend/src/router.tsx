@@ -15,6 +15,8 @@ export const router = createBrowserRouter([
     loader: rootLayoutLoader,
     children: [
       { path: "/", element: <HomePage /> },
+      // 새 대화 화면 (고정 경로라 /chats/:chatId보다 먼저 매칭되어 chatId가 비어 있음)
+      { path: "/chats/new", element: <ChatPage /> },
       // 백엔드 명세에 맞춘 채팅방 상세 경로 (/chats/{chatId})
       { path: "/chats/:chatId", element: <ChatPage /> },
       {
