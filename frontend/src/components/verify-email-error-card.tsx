@@ -3,7 +3,8 @@ import { Link, useLocation } from "react-router";
 import { AlertCircle } from "lucide-react";
 import { z } from "zod";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import {
   Card,
   CardContent,

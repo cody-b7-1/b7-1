@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 
 type Props = {
   /** 로그인한 사용자의 이메일. 없으면 로그인 버튼을 보여줌 */
