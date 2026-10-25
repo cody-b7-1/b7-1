@@ -45,7 +45,7 @@ export function ChatSidebar({
             aria-current={active ? "page" : undefined}
             className={cn(
               "flex items-center gap-2.5 rounded-lg px-2 py-2.5 text-left hover:bg-muted",
-              active && "bg-muted",
+              active && "bg-foreground/8 hover:bg-foreground/8",
             )}
           >
             <PhilosopherAvatar

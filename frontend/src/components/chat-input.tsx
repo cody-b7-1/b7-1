@@ -6,6 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 const MAX_LENGTH = 1000;
+// 이 길이부터 글자 수를 보여줌
+const COUNTER_FROM = 800;
 
 type Props = {
   philosopherName: string;
@@ -37,19 +39,20 @@ export function ChatInput({ philosopherName, waiting, onSend }: Props) {
 
   return (
     <form
-      className="border-t bg-background"
+      className="bg-background"
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
     >
-      <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 pt-4 pb-5">
+      <div className="mx-auto flex max-w-3xl flex-col gap-2 px-6 pt-2 pb-5">
         <label htmlFor="message" className="sr-only">
           {philosopherName}에게 메시지 보내기
         </label>
         <div className="flex items-end gap-2.5 rounded-[18px] border border-input bg-card py-2 pr-2 pl-4 focus-within:ring-[3px] focus-within:ring-ring/20">
           <Textarea
             id="message"
+            rows={1}
             value={draft}
             maxLength={MAX_LENGTH}
             onChange={(e) => {
@@ -67,7 +70,7 @@ export function ChatInput({ philosopherName, waiting, onSend }: Props) {
               }
             }}
             placeholder={`${philosopherName}에게 이어서 이야기해 보세요`}
-            className="min-h-12 resize-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
+            className="min-h-11 max-h-48 resize-none self-center border-0 bg-transparent px-0 py-2.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
             aria-invalid={!!error || undefined}
             aria-describedby="message-hint"
           />
@@ -90,9 +93,16 @@ export function ChatInput({ philosopherName, waiting, onSend }: Props) {
             {error ||
               "실제 철학자가 아닌, 철학 사상에 기반한 AI 캐릭터입니다. 응답에는 오류가 있을 수 있습니다."}
           </span>
-          <span className="shrink-0">
-            {draft.length} / {MAX_LENGTH}자
-          </span>
+          {draft.length >= COUNTER_FROM && (
+            <span
+              className={cn(
+                "shrink-0",
+                draft.length >= MAX_LENGTH && "text-destructive",
+              )}
+            >
+              {draft.length} / {MAX_LENGTH}자
+            </span>
+          )}
         </div>
       </div>
     </form>

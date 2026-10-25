@@ -123,8 +123,42 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* 한글을 음절이 아닌 어절 단위로 줄바꿈, 긴 URL은 넘치지 않게 */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* 철학자 답변의 마크다운 본문 */
+@layer components {
+  .chat-markdown > * + * {
+    @apply mt-3;
+  }
+  .chat-markdown strong {
+    @apply font-semibold;
+  }
+  .chat-markdown :is(h1, h2, h3, h4) {
+    @apply mt-5 text-base font-bold;
+  }
+  .chat-markdown :is(ul, ol) {
+    @apply space-y-1 pl-5;
+  }
+  .chat-markdown ul {
+    @apply list-disc;
+  }
+  .chat-markdown ol {
+    @apply list-decimal;
+  }
+  .chat-markdown blockquote {
+    @apply border-l-2 pl-4 text-muted-foreground;
+  }
+  .chat-markdown a {
+    @apply underline underline-offset-2;
+  }
+  .chat-markdown code {
+    @apply rounded bg-muted px-1 py-0.5 text-[0.9em];
   }
 }

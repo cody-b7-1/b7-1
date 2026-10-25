@@ -39,7 +39,7 @@ export function ChatHeader({
       </div>
       <Button
         variant="outline"
-        className="h-11 rounded-full border-foreground pl-2.5 font-semibold"
+        className="h-11 rounded-full pl-2.5 font-medium"
         onClick={onSwitch}
         disabled={switchDisabled}
       >
