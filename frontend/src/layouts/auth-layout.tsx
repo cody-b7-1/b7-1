@@ -1,8 +1,8 @@
-import { Outlet, useLoaderData } from "react-router";
+import { Navigate, Outlet, useLoaderData, useOutletContext } from "react-router";
 
 import { PhilosopherAvatar } from "@/components/philosopher-avatar";
 import { AvatarGroup } from "@/components/ui/avatar";
-import { getPhilosopher, getPhilosopherList } from "@/lib/api";
+import { getPhilosopher, getPhilosopherList, type User } from "@/lib/api";
 import { type ResolvedPhilosopher, withDefaults } from "@/lib/philosopher";
 
 // 위에 겹쳐 보여 줄 철학자 수
@@ -26,7 +26,14 @@ export async function authLayoutLoader(): Promise<ResolvedPhilosopher[]> {
 // 위에 철학자 얼굴들을 겹쳐 두고, 가운데에 각 화면의 카드를 끼웁니다.
 // 헤더와 푸터는 RootLayout이 붙입니다.
 export function AuthLayout() {
+  const { user } = useOutletContext<{ user: User | null }>();
   const philosophers = useLoaderData<typeof authLayoutLoader>();
+
+  // 이미 로그인된 사용자는 홈("/")으로 리다이렉트합니다.
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <main className="flex flex-1 flex-col items-center px-6 pt-10 pb-20">
       <AvatarGroup

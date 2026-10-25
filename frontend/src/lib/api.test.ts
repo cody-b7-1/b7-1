@@ -10,9 +10,12 @@ import {
   getPhilosopherSummaries,
   login,
   logout,
+  refreshToken,
   sendMessage,
+  sendVerificationEmail,
   signUp,
   startChat,
+  verifyEmailToken,
 } from "./api";
 
 // 개인 .env.local의 mock 설정과 관계없이 실제 요청 경로를 검증합니다.
@@ -49,6 +52,22 @@ test("signUp: 201 + Set-Cookie면 User 반환", async () => {
   expect(sent(fetch)).toEqual({ url: "/api/auth/sign-up", method: "POST", body });
 });
 
+test("sendVerificationEmail: 204면 null 반환", async () => {
+  const fetch = mockFetch(204);
+  const body = { email: "a@b.c" };
+
+  expect(await sendVerificationEmail(body)).toBeNull();
+  expect(sent(fetch)).toEqual({ url: "/api/auth/email/send", method: "POST", body });
+});
+
+test("verifyEmailToken: 204면 null 반환", async () => {
+  const fetch = mockFetch(204);
+  const body = { token: "verify-token-123" };
+
+  expect(await verifyEmailToken(body)).toBeNull();
+  expect(sent(fetch)).toEqual({ url: "/api/auth/email/verify", method: "POST", body });
+});
+
 test("login: 204 + Set-Cookie면 null", async () => {
   const fetch = mockFetch(204, undefined, cookie);
 
@@ -76,6 +95,29 @@ test("logout: 204 + 쿠키 만료 Set-Cookie면 null", async () => {
   expect(sent(fetch)).toMatchObject({ url: "/api/auth/logout", method: "POST" });
 });
 
+test("refreshToken: 204면 null", async () => {
+  const fetch = mockFetch(204, undefined, cookie);
+
+  expect(await refreshToken()).toBeNull();
+  expect(sent(fetch)).toMatchObject({ url: "/api/auth/refresh", method: "POST" });
+});
+
+test("401 발생 시 토큰 갱신(/auth/refresh) 후 요청을 재시도한다", async () => {
+  const user = { email: "a@b.c", nickname: "nick" };
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "expired" }), { status: 401 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(user), { status: 200 }));
+  vi.stubGlobal("fetch", fetch);
+
+  expect(await getMe()).toEqual(user);
+  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(fetch.mock.calls[0][0]).toBe("/api/auth/me");
+  expect(fetch.mock.calls[1][0]).toBe("/api/auth/refresh");
+  expect(fetch.mock.calls[2][0]).toBe("/api/auth/me");
+});
+
 test("getMe: 200이면 User 반환", async () => {
   const fetch = mockFetch(200, { email: "a@b.c", nickname: "nick" });
 
@@ -83,8 +125,12 @@ test("getMe: 200이면 User 반환", async () => {
   expect(sent(fetch)).toMatchObject({ url: "/api/auth/me", method: undefined });
 });
 
-test("getMe: 401이면 ApiError (로그아웃 상태)", async () => {
-  mockFetch(401);
+test("getMe: 401이고 refresh도 실패하면 ApiError (로그아웃 상태)", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "expired" }), { status: 401 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "invalid refresh" }), { status: 401 }));
+  vi.stubGlobal("fetch", fetch);
 
   await expect(getMe()).rejects.toMatchObject({ status: 401 });
 });

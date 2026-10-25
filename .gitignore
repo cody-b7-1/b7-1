@@ -76,3 +76,6 @@ pnpm-debug.log*
 
 # Frontend local env files
 .env*.local
+
+# AI Agent System Skills
+skills/
