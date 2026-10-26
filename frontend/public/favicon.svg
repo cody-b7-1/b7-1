@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none">
+  <!-- 배경 원형 (모던한 다크 잉크/스톤 톤) -->
+  <rect width="32" height="32" rx="8" fill="#1C1917" />
+  
+  <!-- 지혜의 책/펼쳐진 고서 아이콘 (은은한 골드/앰버 톤) -->
+  <path
+    d="M6 10.5C6 9.119 7.119 8 8.5 8H15v15H8.5A2.5 2.5 0 0 0 6 25.5V10.5z"
+    fill="#F59E0B"
+    fill-opacity="0.9"
+  />
+  <path
+    d="M26 10.5C26 9.119 24.881 8 23.5 8H17v15h6.5a2.5 2.5 0 0 1 2.5 2.5V10.5z"
+    fill="#D97706"
+  />
+  <path
+    d="M16 8v15"
+    stroke="#78350F"
+    stroke-width="1.5"
+    stroke-linecap="round"
+  />
+  
+  <!-- 지혜와 사유를 상징하는 별빛 포인트 -->
+  <path
+    d="M16 4.5l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8.8-1.7z"
+    fill="#FDE68A"
+  />
+</svg>
