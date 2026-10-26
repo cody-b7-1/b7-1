@@ -6,6 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 const MAX_LENGTH = 1000;
+// 이 길이부터 글자 수를 보여줌
+const COUNTER_FROM = 800;
 
 type Props = {
   philosopherName: string;
@@ -28,7 +30,15 @@ export const ChatInput = memo(function ChatInput({
   const handleInput = () => {
     if (!textareaRef.current || !counterRef.current) return;
     const length = textareaRef.current.value.length;
-    counterRef.current.textContent = `${length} / ${MAX_LENGTH}자`;
+    if (length >= COUNTER_FROM) {
+      counterRef.current.textContent = `${length} / ${MAX_LENGTH}자`;
+      counterRef.current.className = cn(
+        "shrink-0",
+        length >= MAX_LENGTH && "text-destructive",
+      );
+    } else {
+      counterRef.current.textContent = "";
+    }
     if (error) setError("");
   };
 
@@ -42,14 +52,14 @@ export const ChatInput = memo(function ChatInput({
 
     setError("");
     if (textareaRef.current) textareaRef.current.value = "";
-    if (counterRef.current) counterRef.current.textContent = `0 / ${MAX_LENGTH}자`;
+    if (counterRef.current) counterRef.current.textContent = "";
 
     const failure = await onSend(prompt);
     if (failure) {
       if (textareaRef.current) {
         textareaRef.current.value = prompt;
       }
-      if (counterRef.current) {
+      if (counterRef.current && prompt.length >= COUNTER_FROM) {
         counterRef.current.textContent = `${prompt.length} / ${MAX_LENGTH}자`;
       }
       setError(failure);
@@ -58,13 +68,13 @@ export const ChatInput = memo(function ChatInput({
 
   return (
     <form
-      className="border-t bg-background"
+      className="bg-background"
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
     >
-      <div className="mx-auto flex max-w-3xl flex-col gap-1.5 px-4 pt-2.5 pb-3 sm:gap-2 sm:px-6 sm:pt-4 sm:pb-5">
+      <div className="mx-auto flex max-w-3xl flex-col gap-1.5 px-4 pt-2 pb-3 sm:gap-2 sm:px-6 sm:pt-2 sm:pb-5">
         <label htmlFor="message" className="sr-only">
           {philosopherName}에게 메시지 보내기
         </label>
@@ -72,6 +82,7 @@ export const ChatInput = memo(function ChatInput({
           <Textarea
             ref={textareaRef}
             id="message"
+            rows={1}
             defaultValue=""
             maxLength={MAX_LENGTH}
             onInput={handleInput}
@@ -86,7 +97,7 @@ export const ChatInput = memo(function ChatInput({
               }
             }}
             placeholder={`${philosopherName}에게 이어서 이야기해 보세요`}
-            className="min-h-10 resize-none border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:min-h-12 sm:text-base dark:bg-transparent"
+            className="min-h-11 max-h-48 resize-none self-center border-0 bg-transparent px-0 py-2.5 text-sm shadow-none focus-visible:ring-0 sm:text-base dark:bg-transparent"
             aria-invalid={!!error || undefined}
             aria-describedby="message-hint"
           />
@@ -109,9 +120,7 @@ export const ChatInput = memo(function ChatInput({
             {error ||
               "실제 철학자가 아닌 AI 캐릭터입니다. 응답에 오류가 있을 수 있습니다."}
           </span>
-          <span ref={counterRef} className="shrink-0">
-            0 / {MAX_LENGTH}자
-          </span>
+          <span ref={counterRef} className="shrink-0" />
         </div>
       </div>
     </form>

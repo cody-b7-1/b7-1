@@ -3,7 +3,6 @@ from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Response,
@@ -110,16 +109,13 @@ def get_me(
     response_model=SignUpResponse,
     summary="회원가입",
     description=(
-        "이메일 주소와 비밀번호로 계정을 생성하고 생성된 사용자의 이메일 주소와 "
-        "닉네임을 반환합니다. 인증 메일은 응답 후 백그라운드에서 전송하며, SMTP "
-        "전송 실패는 로그로 기록되고 이미 생성된 회원가입 응답에는 영향을 주지 않습니다."
+        "이메일 주소, 닉네임, 비밀번호로 미인증 상태의 계정을 생성하고 "
+        "생성된 사용자의 이메일 주소와 닉네임을 반환합니다. "
+        "이메일 인증 링크 발송은 별도의 `/api/auth/email/send` 엔드포인트를 통해 수행합니다."
     ),
     responses={
         status.HTTP_201_CREATED: {
-            "description": (
-                "회원가입에 성공하여 생성된 사용자 정보를 반환하고 인증 메일 전송을 "
-                "예약했습니다. 이후 SMTP 전송 실패 여부와 관계없이 이 응답을 유지합니다."
-            ),
+            "description": "회원가입에 성공하여 생성된 사용자 정보를 반환합니다.",
         },
         status.HTTP_409_CONFLICT: {
             "description": "삭제되지 않은 계정에 이미 등록된 이메일 주소입니다.",
@@ -137,7 +133,6 @@ def get_me(
 )
 def sign_up(
     request: SignUpRequest,
-    background_tasks: BackgroundTasks,
     db: DBSession,
 ) -> SignUpResponse:
     try:

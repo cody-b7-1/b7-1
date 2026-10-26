@@ -9,10 +9,11 @@ type Props = {
   onLogout?: () => void;
 };
 
-// 메인·로그인·회원가입·인증 화면이 함께 쓰는 상단 영역 (모바일에서는 높이 및 패딩을 슬림하게 조정)
+// 메인·로그인·회원가입·인증 화면이 함께 쓰는 상단 영역
 export function SiteHeader({ email, onLogout }: Props) {
   return (
-    <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4 md:px-12 md:py-6">
+    // 채팅 화면에선 전체 폭으로 펼치고, 모바일에서는 높이 및 패딩을 슬림하게 조정
+    <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4 md:px-12 md:py-6 group-has-[[data-chat]]/root:max-w-none group-has-[[data-chat]]/root:py-3 md:group-has-[[data-chat]]/root:px-6 md:group-has-[[data-chat]]/root:pr-8">
       <Link to="/" className="text-lg font-bold tracking-tight sm:text-xl">
         철학자의 방
       </Link>

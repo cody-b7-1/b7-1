@@ -55,7 +55,7 @@ export function ChatHeader({
 
       <Button
         variant="outline"
-        className="h-9 shrink-0 rounded-full border-foreground px-3 text-xs font-semibold sm:h-11 sm:pl-2.5 sm:text-sm"
+        className="h-9 shrink-0 rounded-full pl-2 pr-3 text-xs font-medium sm:h-11 sm:pl-2.5 sm:pr-4 sm:text-sm"
         onClick={onSwitch}
         disabled={switchDisabled}
       >

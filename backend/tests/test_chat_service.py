@@ -204,7 +204,7 @@ class ChatServiceTests(unittest.TestCase):
             [m.sender_role for m in response.messages],
             [SenderRole.SYSTEM, SenderRole.USER, SenderRole.PHILOSOPHER],
         )
-        self.assertIsNone(response.messages[0].philosopher_id)
+        self.assertEqual(response.messages[0].philosopher_id, 3)
         self.assertIn("니체", response.messages[0].content)
         self.assertEqual(chat.current_philosopher_id, 3)
         created = [m.created_at for m in response.messages]

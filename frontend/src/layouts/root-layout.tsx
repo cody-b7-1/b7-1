@@ -22,13 +22,13 @@ export function RootLayout() {
   };
 
   return (
-    // 채팅 화면은 높이를 화면에 고정하고 대화창 안에서 스크롤, 하단 푸터는 채팅 화면일 때 숨김
-    <div className="group flex min-h-svh flex-col has-[[data-chat]]:h-svh">
+    // 채팅 화면은 높이를 화면에 고정하고 대화창 안에서 스크롤, 채팅 화면일 때 하단 푸터 숨김
+    <div className="group/root flex min-h-svh flex-col has-[[data-chat]]:h-dvh">
       <SiteHeader email={user?.email} onLogout={handleLogout} />
       <div className="flex min-h-0 flex-1 flex-col">
         <Outlet context={{ user }} />
       </div>
-      <footer className="mx-auto w-full max-w-7xl border-t px-4 pt-4 pb-6 text-xs text-muted-foreground group-has-[[data-chat]]:hidden sm:px-6 sm:text-[13px] md:px-12 md:pt-6 md:pb-12">
+      <footer className="mx-auto w-full max-w-7xl border-t px-4 pt-4 pb-6 text-xs text-muted-foreground group-has-[[data-chat]]/root:hidden sm:px-6 sm:text-[13px] md:px-12 md:pt-6 md:pb-12">
         실제 철학자가 아닌, 철학 사상에 기반한 AI 캐릭터입니다. 응답에는 오류가
         있을 수 있습니다.
       </footer>
