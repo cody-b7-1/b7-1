@@ -12,17 +12,17 @@ type Props = {
 // 메인·로그인·회원가입·인증 화면이 함께 쓰는 상단 영역
 export function SiteHeader({ email, onLogout }: Props) {
   return (
-    // 채팅 화면에선 전체 폭으로 펼쳐 사이드바·대화 헤더와 좌우 끝을 맞춤
-    <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-6 md:px-12 group-has-[[data-chat]]/root:max-w-none group-has-[[data-chat]]/root:py-3 md:group-has-[[data-chat]]/root:px-6 md:group-has-[[data-chat]]/root:pr-8">
-      <Link to="/" className="text-xl font-bold tracking-tight">
+    // 채팅 화면에선 전체 폭으로 펼치고, 모바일에서는 높이 및 패딩을 슬림하게 조정
+    <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4 md:px-12 md:py-6 group-has-[[data-chat]]/root:max-w-none group-has-[[data-chat]]/root:py-3 md:group-has-[[data-chat]]/root:px-6 md:group-has-[[data-chat]]/root:pr-8">
+      <Link to="/" className="text-lg font-bold tracking-tight sm:text-xl">
         철학자의 방
       </Link>
       {email ? (
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground sm:gap-3">
           <span className="hidden sm:inline">{email}</span>
           <Button
             variant="outline"
-            className="h-11 rounded-full px-5"
+            className="h-8 rounded-full px-3 text-xs sm:h-11 sm:px-5 sm:text-sm"
             onClick={onLogout}
           >
             로그아웃
@@ -33,7 +33,7 @@ export function SiteHeader({ email, onLogout }: Props) {
           to="/login"
           className={buttonVariants({
             variant: "outline",
-            className: "h-11 rounded-full px-5 text-[15px]",
+            className: "h-8 rounded-full px-3 text-xs sm:h-11 sm:px-5 sm:text-[15px]",
           })}
         >
           로그인
