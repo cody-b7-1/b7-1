@@ -295,7 +295,7 @@ class ChatService:
             system_message = Message(
                 message_id=uuid4(),
                 chat_id=chat.chat_id,
-                philosopher_id=philosopher.id,
+                philosopher_id=philosopher.philosopher_id,
                 sender_role=SenderRole.SYSTEM,
                 content=f"대화 상대가 {philosopher.name}(으)로 변경되었습니다.",
                 created_at=now,

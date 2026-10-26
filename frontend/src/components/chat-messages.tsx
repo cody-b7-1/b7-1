@@ -1,5 +1,6 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
+import Markdown from "react-markdown";
 
 import { PhilosopherAvatar } from "@/components/philosopher-avatar";
 import { Button } from "@/components/ui/button";
@@ -98,9 +99,10 @@ export const ChatMessages = memo(function ChatMessages({
     lastPhilosopherId != null && lastPhilosopherId !== current.id;
 
   return (
+    // 위아래 끝을 흐리게 해서 스크롤된 내용이 경계에서 딱 잘려 보이지 않게
     <div
       ref={containerRef}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto mask-[linear-gradient(transparent,black_24px,black_calc(100%-24px),transparent)]"
     >
       <div
         className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-6 py-8"
@@ -165,16 +167,16 @@ export const ChatMessages = memo(function ChatMessages({
           return (
             <div key={m.messageId} className="flex items-start gap-3">
               <PhilosopherAvatar philosopher={info} decorative />
-              <div className="max-w-[560px]">
+              <div className="min-w-0 flex-1 pt-1">
                 <p
                   className="mb-1.5 text-[13px] font-bold"
                   style={{ color: info.inkColor }}
                 >
                   {info.name}
                 </p>
-                <p className="rounded-[18px] rounded-tl-sm border bg-card px-[18px] py-3.5 text-[15px] leading-relaxed whitespace-pre-wrap">
-                  {m.content}
-                </p>
+                <div className="chat-markdown text-[15px] leading-[1.7]">
+                  <Markdown>{m.content}</Markdown>
+                </div>
               </div>
             </div>
           );

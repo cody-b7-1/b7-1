@@ -4,10 +4,15 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
-from fastapi import BackgroundTasks, HTTPException, Response
+from fastapi import HTTPException, Response
 
 os.environ["JWT_SECRET_KEY"] = "dev-signing-key-with-at-least-32-bytes"
 
+from app.auth.dependencies import (
+    get_optional_refresh_token,
+    get_required_refresh_token,
+)
+from app.auth.email import EmailDeliveryError
 from app.auth.router import (
     login,
     logout,
@@ -17,11 +22,6 @@ from app.auth.router import (
     verify_email_link_token,
 )
 from app.auth.router import router as auth_router
-from app.auth.email import EmailDeliveryError
-from app.auth.dependencies import (
-    get_optional_refresh_token,
-    get_required_refresh_token,
-)
 from app.auth.schemas import (
     EmailSendRequest,
     EmailVerifyRequest,
@@ -111,15 +111,13 @@ class AuthRouterTests(unittest.IsolatedAsyncioTestCase):
         )
         user = Mock(email="user@example.com", nickname="철학탐험가")
         db = Mock()
-        background_tasks = BackgroundTasks()
 
         with patch("app.auth.router.create_user", return_value=user) as create:
-            result = sign_up(request, background_tasks, db)
+            result = sign_up(request, db)
 
         self.assertEqual(result.email, "user@example.com")
         self.assertEqual(result.nickname, "철학탐험가")
         create.assert_called_once_with(db, request)
-        self.assertEqual(background_tasks.tasks, [])
 
     def test_logout_revokes_refresh_token_and_expires_cookies(self) -> None:
         response = Response()
@@ -229,7 +227,9 @@ class AuthRouterTests(unittest.IsolatedAsyncioTestCase):
         cookies = response.headers.getlist("set-cookie")
         self.assertEqual(len(cookies), 2)
         self.assertTrue(
-            any(cookie.startswith("accessToken=new-access-token;") for cookie in cookies)
+            any(
+                cookie.startswith("accessToken=new-access-token;") for cookie in cookies
+            )
         )
         self.assertTrue(
             any(
@@ -306,9 +306,7 @@ class AuthRouterTests(unittest.IsolatedAsyncioTestCase):
         tampered_token = valid_token.rsplit(".", 1)[0] + ".invalid-signature"
         tokens = (
             None,
-            create_refresh_token(
-                uuid4(), expires_delta=timedelta(seconds=-1)
-            ),
+            create_refresh_token(uuid4(), expires_delta=timedelta(seconds=-1)),
             tampered_token,
         )
 
@@ -338,9 +336,7 @@ class AuthRouterTests(unittest.IsolatedAsyncioTestCase):
         tampered_token = valid_token.rsplit(".", 1)[0] + ".invalid-signature"
         tokens = (
             None,
-            create_refresh_token(
-                uuid4(), expires_delta=timedelta(seconds=-1)
-            ),
+            create_refresh_token(uuid4(), expires_delta=timedelta(seconds=-1)),
             tampered_token,
         )
 
@@ -350,12 +346,11 @@ class AuthRouterTests(unittest.IsolatedAsyncioTestCase):
                 patch("app.auth.router.rotate_refresh_token") as rotate,
                 self.assertRaises(HTTPException) as raised,
             ):
-                get_required_refresh_token(
-                    get_optional_refresh_token(refresh_token)
-                )
+                get_required_refresh_token(get_optional_refresh_token(refresh_token))
 
             self.assertEqual(raised.exception.status_code, 401)
             rotate.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
